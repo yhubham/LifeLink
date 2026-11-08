@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: lifelink-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lifelink
+      POSTGRES_USER: lifelink_user
+      POSTGRES_PASSWORD: lifelink_dev_password
+    ports:
+      # 5433: host 5432 is already used by a local PostgreSQL installation
+      - "5433:5432"
+    volumes:
+      - lifelink_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lifelink_user -d lifelink"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  lifelink_data:
