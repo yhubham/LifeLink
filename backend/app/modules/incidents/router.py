@@ -99,6 +99,47 @@ def list_incidents(
     return db.scalars(stmt).all()
 
 
+@router.get("/incidents/stats")
+def incident_stats(
+    db: DbDep,
+    _: User = Depends(require_roles(*STAFF)),
+):
+    total = db.scalar(select(func.count()).select_from(Incident)) or 0
+    by_status = {
+        status_name: 0 for status_name in IncidentStatus.__members__
+    }
+    for status_value, count in db.execute(
+        select(Incident.status, func.count()).group_by(Incident.status)
+    ).all():
+        by_status[status_value.value] = count
+    by_type = {
+        t: c
+        for t, c in db.execute(
+            select(Incident.incident_type, func.count()).group_by(
+                Incident.incident_type
+            )
+        ).all()
+    }
+    patients = db.scalar(select(func.count()).select_from(Patient)) or 0
+    start_of_day = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    today = db.scalar(
+        select(func.count())
+        .select_from(Incident)
+        .where(Incident.reported_at >= start_of_day)
+    ) or 0
+    active = total - by_status["CLOSED"] - by_status["CANCELLED"]
+    return {
+        "total": total,
+        "active": active,
+        "today": today,
+        "patients": patients,
+        "by_status": by_status,
+        "by_type": by_type,
+    }
+
+
 @router.get("/incidents/{incident_id}", response_model=IncidentDetailOut)
 def get_incident(
     incident_id: uuid.UUID,
