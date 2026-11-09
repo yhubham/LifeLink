@@ -7,12 +7,14 @@ from app.api.v1.api import api_router
 from app.core.config import settings
 from app.database.session import engine
 from app.models import Base  # noqa: F401  (registers all tables)
+from app.services.realtime import manager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create tables on startup (demo convenience; Alembic takes over later)
     Base.metadata.create_all(bind=engine)
+    manager.bind_loop()
     yield
 
 

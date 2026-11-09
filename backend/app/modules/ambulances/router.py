@@ -18,6 +18,7 @@ from app.models import (
 )
 from app.models.user import utcnow
 from app.services.geo import eta_minutes, haversine_km, move_towards
+from app.services.realtime import publish
 
 router = APIRouter(tags=["ambulances"])
 
@@ -132,6 +133,11 @@ def create_ambulance(
     )
     db.commit()
     db.refresh(ambulance)
+    publish(
+        "admin",
+        "fleet.updated",
+        {"ambulance_id": str(ambulance.id), "call_sign": ambulance.call_sign},
+    )
     return _ambulance_dict(ambulance)
 
 
@@ -160,6 +166,17 @@ def update_location(
     )
     db.commit()
     db.refresh(ambulance)
+    publish(
+        ["admin", "ambulance"],
+        "ambulance.moved",
+        {
+            "ambulance_id": str(ambulance.id),
+            "call_sign": ambulance.call_sign,
+            "latitude": ambulance.latitude,
+            "longitude": ambulance.longitude,
+            "status": ambulance.status.value,
+        },
+    )
     return _ambulance_dict(ambulance)
 
 
@@ -251,6 +268,18 @@ def create_assignment(
     )
     db.commit()
     db.refresh(assignment)
+    publish(
+        ["admin", "ambulance", f"incidents/{incident.id}"],
+        "assignment.updated",
+        {
+            "assignment_id": str(assignment.id),
+            "incident_id": str(incident.id),
+            "public_code": incident.public_code,
+            "call_sign": ambulance.call_sign,
+            "status": assignment.assignment_status.value,
+            "incident_status": incident.status.value,
+        },
+    )
     return _assignment_dict(db, assignment)
 
 
@@ -322,6 +351,19 @@ def update_assignment(
     )
     db.commit()
     db.refresh(assignment)
+    publish(
+        ["admin", "ambulance", f"incidents/{assignment.incident_id}"],
+        "assignment.updated",
+        {
+            "assignment_id": str(assignment.id),
+            "incident_id": str(assignment.incident_id),
+            "public_code": incident.public_code if incident else None,
+            "call_sign": ambulance.call_sign if ambulance else None,
+            "status": assignment.assignment_status.value,
+            "incident_status": incident.status.value if incident else None,
+            "ambulance_status": ambulance.status.value if ambulance else None,
+        },
+    )
     return _assignment_dict(db, assignment)
 
 
@@ -413,6 +455,23 @@ def simulate_step(
     db.commit()
     db.refresh(assignment)
     db.refresh(ambulance)
+    publish(
+        ["admin", "ambulance", f"incidents/{incident.id}"],
+        "ambulance.moved",
+        {
+            "assignment_id": str(assignment.id),
+            "ambulance_id": str(ambulance.id),
+            "call_sign": ambulance.call_sign,
+            "latitude": ambulance.latitude,
+            "longitude": ambulance.longitude,
+            "distance_km": round(distance_after, 3),
+            "eta_minutes": eta_minutes(distance_after),
+            "arrived": arrived,
+            "assignment_status": assignment.assignment_status.value,
+            "incident_id": str(incident.id),
+            "incident_status": incident.status.value,
+        },
+    )
 
     return {
         "assignment_id": assignment.id,

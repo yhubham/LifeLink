@@ -9,6 +9,7 @@ import {
   Building2,
 } from 'lucide-react'
 import { useAuthStore } from '../context/authStore'
+import MobileNav from '../components/common/MobileNav'
 
 const NAV = [
   ['/admin/dashboard', 'Overview', LayoutDashboard],
@@ -66,16 +67,18 @@ export default function AdminLayout() {
       </aside>
 
       <div className="flex-1">
-        <header className="flex items-center gap-3 border-b border-navy-800 bg-navy-950/80 px-6 py-4">
+        <header className="flex items-center gap-3 border-b border-navy-800 bg-navy-950/80 px-4 py-4 md:px-6">
           <span className="text-sm font-semibold text-slate-300">Control room</span>
           <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-bold text-emerald-400">
             SIMULATION LIVE
           </span>
         </header>
-        <main className="p-6">
+        <main className="p-4 pb-24 md:p-6">
           <Outlet />
         </main>
       </div>
+
+      <MobileNav items={NAV} activeClass="text-red-400" />
     </div>
   )
 }

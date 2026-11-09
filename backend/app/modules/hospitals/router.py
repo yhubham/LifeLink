@@ -2,7 +2,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.deps import DbDep, require_roles
 from app.models import (
@@ -17,6 +17,7 @@ from app.models import (
 )
 from app.models.user import utcnow
 from app.services.geo import eta_minutes, haversine_km
+from app.services.realtime import publish
 
 router = APIRouter(tags=["hospitals"])
 
@@ -120,7 +121,78 @@ def list_hospitals(
     _: User = Depends(require_roles(*STAFF)),
 ):
     hospitals = db.scalars(select(Hospital).order_by(Hospital.name)).all()
-    return [_hospital_dict(h) for h in hospitals]
+    alerts = _open_alert_counts(db)
+    rows = []
+    for h in hospitals:
+        row = _hospital_dict(h)
+        row["open_alerts"] = alerts.get(h.id, 0)
+        rows.append(row)
+    return rows
+
+
+def _open_alert_counts(db) -> dict[uuid.UUID, int]:
+    rows = db.execute(
+        select(HospitalAlert.hospital_id, func.count())
+        .where(HospitalAlert.alert_status == AlertStatus.SENT)
+        .group_by(HospitalAlert.hospital_id)
+    ).all()
+    return {hospital_id: count for hospital_id, count in rows}
+
+
+@router.get("/hospitals/nearby")
+def nearby_hospitals(
+    db: DbDep,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    q: str | None = None,
+    specialty: str | None = None,
+    min_beds: int = 0,
+    max_distance_km: float | None = None,
+    limit: int = 20,
+    _: User = Depends(require_roles(*STAFF)),
+):
+    """Real-time hospital finder.
+
+    Filters active hospitals by name (``q``), specialty and available beds, then
+    ranks them by distance from ``latitude``/``longitude`` when supplied. Each
+    row carries ``distance_km``, ``eta_minutes`` and the count of open pre-alerts
+    so dashboards can refresh live without extra requests.
+    """
+    stmt = select(Hospital).where(Hospital.is_active.is_(True))
+    if q and q.strip():
+        stmt = stmt.where(Hospital.name.ilike(f"%{q.strip()}%"))
+    if min_beds:
+        stmt = stmt.where(Hospital.available_beds >= min_beds)
+    hospitals = db.scalars(stmt.order_by(Hospital.name)).all()
+
+    has_coords = latitude is not None and longitude is not None
+    alerts = _open_alert_counts(db)
+    wanted = specialty.strip().lower() if specialty and specialty.strip() else None
+
+    rows = []
+    for h in hospitals:
+        if wanted:
+            specs = [str(s).lower() for s in (h.specialties or [])]
+            if wanted not in specs:
+                continue
+        distance = (
+            haversine_km(latitude, longitude, h.latitude, h.longitude)
+            if has_coords
+            else None
+        )
+        if (
+            max_distance_km is not None
+            and distance is not None
+            and distance > max_distance_km
+        ):
+            continue
+        row = _hospital_dict(h, distance)
+        row["open_alerts"] = alerts.get(h.id, 0)
+        rows.append(row)
+
+    if has_coords:
+        rows.sort(key=lambda item: item["distance_km"])
+    return rows[: max(1, min(limit, 50))]
 
 
 @router.get("/hospitals/match")
@@ -184,6 +256,16 @@ def update_capacity(
     )
     db.commit()
     db.refresh(hospital)
+    publish(
+        ["admin", "hospital", "ambulance"],
+        "hospital.capacity_updated",
+        {
+            "hospital_id": str(hospital.id),
+            "name": hospital.name,
+            "total_beds": hospital.total_beds,
+            "available_beds": hospital.available_beds,
+        },
+    )
     return _hospital_dict(hospital)
 
 
@@ -239,6 +321,18 @@ def create_alert(
     )
     db.commit()
     db.refresh(alert)
+    publish(
+        ["admin", "hospital", "ambulance", f"incidents/{incident.id}"],
+        "hospital.alert",
+        {
+            "alert_id": str(alert.id),
+            "incident_id": str(incident.id),
+            "hospital_id": str(hospital.id),
+            "hospital_name": hospital.name,
+            "public_code": incident.public_code,
+            "eta_minutes": alert.eta_minutes,
+        },
+    )
     return _alert_dict(db, alert)
 
 
@@ -279,4 +373,13 @@ def acknowledge_alert(
     )
     db.commit()
     db.refresh(alert)
+    publish(
+        ["admin", "hospital", "ambulance", f"incidents/{alert.incident_id}"],
+        "hospital.alert_acknowledged",
+        {
+            "alert_id": str(alert.id),
+            "incident_id": str(alert.incident_id),
+            "hospital_id": str(alert.hospital_id),
+        },
+    )
     return _alert_dict(db, alert)

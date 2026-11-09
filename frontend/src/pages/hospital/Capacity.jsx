@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { BedDouble, Save } from 'lucide-react'
 import { listHospitals, updateCapacity } from '../../services/api'
+import { useRealtime } from '../../hooks/useRealtime'
+import LiveBadge from '../../components/common/LiveBadge'
 
 export default function HospitalCapacity() {
   const [hospitals, setHospitals] = useState([])
@@ -21,6 +23,26 @@ export default function HospitalCapacity() {
       })
       .catch((e) => setError(e.response?.data?.detail || 'Could not load hospitals.'))
   }, [])
+
+  const connected = useRealtime('hospital', (message) => {
+    if (message.type !== 'hospital.capacity_updated') return
+    const p = message.payload
+    setHospitals((rows) =>
+      rows.map((h) =>
+        h.id === p.hospital_id
+          ? { ...h, total_beds: p.total_beds, available_beds: p.available_beds }
+          : h
+      )
+    )
+    setDraft((prev) =>
+      busyId === p.hospital_id
+        ? prev
+        : {
+            ...prev,
+            [p.hospital_id]: { total: p.total_beds, available: p.available_beds },
+          }
+    )
+  })
 
   async function save(hospital) {
     const d = draft[hospital.id]
@@ -50,6 +72,7 @@ export default function HospitalCapacity() {
       <div className="flex items-center gap-2">
         <BedDouble size={20} className="text-emerald-400" />
         <h1 className="text-xl font-bold">Bed capacity</h1>
+        <LiveBadge connected={connected} />
         <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-300">
           simulated data
         </span>

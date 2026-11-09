@@ -101,6 +101,11 @@ export async function matchHospitals(latitude, longitude, limit = 5) {
   return data
 }
 
+export async function searchHospitals(params = {}) {
+  const { data } = await api.get('/hospitals/nearby', { params })
+  return data
+}
+
 export async function updateCapacity(id, payload) {
   const { data } = await api.patch(`/hospitals/${id}/capacity`, payload)
   return data

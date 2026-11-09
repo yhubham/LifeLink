@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 
-from app.api.deps import CurrentUser, DbDep, require_roles
+from app.api.deps import DbDep, require_roles
 from app.models import AuditLog, Incident, IncidentStatus, Patient, User
 from app.schemas.incident import (
     IncidentCreate,
@@ -14,20 +14,41 @@ from app.schemas.incident import (
     PatientCreate,
     PatientOut,
 )
+from app.services.realtime import publish
 
 router = APIRouter(tags=["incidents"])
 
 STAFF = ("ADMIN", "AMBULANCE", "HOSPITAL", "POLICE", "RESCUE")
 
 
+def _broadcast(incident: Incident, event: str) -> None:
+    publish(
+        ["admin", f"incidents/{incident.id}"],
+        event,
+        {
+            "incident_id": str(incident.id),
+            "public_code": incident.public_code,
+            "incident_type": incident.incident_type,
+            "status": incident.status.value,
+        },
+    )
+
+
 def _next_public_code(db) -> str:
     year = datetime.now(timezone.utc).year
-    count = db.scalar(
-        select(func.count())
-        .select_from(Incident)
-        .where(func.extract("year", Incident.reported_at) == year)
-    )
-    return f"LL-{year}-{count + 1:04d}"
+    prefix = f"LL-{year}-"
+    codes = db.scalars(
+        select(Incident.public_code).where(
+            Incident.public_code.like(f"{prefix}%")
+        )
+    ).all()
+    highest = 0
+    for code in codes:
+        try:
+            highest = max(highest, int(code.rsplit("-", 1)[1]))
+        except (IndexError, ValueError):
+            continue
+    return f"{prefix}{highest + 1:04d}"
 
 
 def _log(db, user_id: uuid.UUID | None, action: str, entity_id, details=None):
@@ -71,6 +92,7 @@ def create_incident(body: IncidentCreate, db: DbDep):
     _log(db, None, "incident.created", incident.id, {"code": incident.public_code})
     db.commit()
     db.refresh(incident)
+    _broadcast(incident, "incident.created")
     return incident
 
 
@@ -164,6 +186,7 @@ def update_incident(
     _log(db, user.id, "incident.status_changed", incident.id, {"status": body.status.value})
     db.commit()
     db.refresh(incident)
+    _broadcast(incident, "incident.updated")
     return incident
 
 
@@ -183,6 +206,7 @@ def verify_incident(
     _log(db, user.id, "incident.verified", incident.id)
     db.commit()
     db.refresh(incident)
+    _broadcast(incident, "incident.updated")
     return incident
 
 
@@ -203,6 +227,7 @@ def close_incident(
     _log(db, user.id, "incident.closed", incident.id)
     db.commit()
     db.refresh(incident)
+    _broadcast(incident, "incident.updated")
     return incident
 
 
@@ -223,6 +248,11 @@ def add_patient(
     _log(db, None, "patient.added", patient.id, {"incident": str(incident_id)})
     db.commit()
     db.refresh(patient)
+    publish(
+        ["admin", "hospital"],
+        "patient.added",
+        {"incident_id": str(incident_id), "patient_id": str(patient.id)},
+    )
     return patient
 
 

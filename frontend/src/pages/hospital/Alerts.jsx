@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, RefreshCw, Siren } from 'lucide-react'
 import { acknowledgeAlert, incomingAlerts } from '../../services/api'
 import { ALERT_STYLES, PRIORITY_STYLES, formatTime } from '../../lib/status'
+import { useRealtime } from '../../hooks/useRealtime'
+import LiveBadge from '../../components/common/LiveBadge'
 
 export default function HospitalAlerts() {
   const [alerts, setAlerts] = useState([])
@@ -10,13 +12,27 @@ export default function HospitalAlerts() {
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState(null)
 
-  function load() {
-    incomingAlerts(showAcknowledged)
+  const load = useCallback(() => {
+    return incomingAlerts(showAcknowledged)
       .then(setAlerts)
       .catch((e) => setError(e.response?.data?.detail || 'Could not load alerts.'))
-  }
+  }, [showAcknowledged])
 
-  useEffect(load, [showAcknowledged])
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const connected = useRealtime('hospital', (message) => {
+    const type = message.type || ''
+    if (
+      type === 'hospital.alert' ||
+      type === 'hospital.alert_acknowledged' ||
+      type === 'patient.added' ||
+      type.startsWith('incident.')
+    ) {
+      load()
+    }
+  })
 
   async function acknowledge(id) {
     setBusyId(id)
@@ -32,6 +48,7 @@ export default function HospitalAlerts() {
     <div>
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold">Incoming alerts</h1>
+        <LiveBadge connected={connected} />
         <span className="rounded-full bg-red-500/15 px-2.5 py-0.5 text-xs font-bold text-red-400">
           {alerts.filter((a) => a.alert_status === 'SENT').length} open
         </span>

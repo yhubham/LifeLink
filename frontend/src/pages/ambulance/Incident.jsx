@@ -16,10 +16,11 @@ import {
 } from '../../services/api'
 import {
   ASSIGNMENT_STYLES,
-  PRIORITY_STYLES,
   STATUS_STYLES,
   formatTime,
 } from '../../lib/status'
+import { useRealtime } from '../../hooks/useRealtime'
+import LiveBadge from '../../components/common/LiveBadge'
 
 export default function AmbulanceIncident() {
   const { id } = useParams()
@@ -44,6 +45,17 @@ export default function AmbulanceIncident() {
   useEffect(() => {
     load()
   }, [load])
+
+  const connected = useRealtime(`incidents/${id}`, (message) => {
+    const type = message.type || ''
+    if (
+      type.startsWith('incident.') ||
+      type.startsWith('assignment.') ||
+      type === 'ambulance.moved'
+    ) {
+      load()
+    }
+  })
 
   useEffect(() => {
     if (!simulating || !assignment) return
@@ -106,6 +118,7 @@ export default function AmbulanceIncident() {
         <span className={`rounded border px-2.5 py-0.5 text-xs font-bold ${STATUS_STYLES[incident.status]}`}>
           {incident.status}
         </span>
+        <LiveBadge connected={connected} />
         <span className="text-slate-400">{incident.incident_type}</span>
         <span className="text-xs text-slate-500">{formatTime(incident.reported_at)}</span>
         {assignment && (

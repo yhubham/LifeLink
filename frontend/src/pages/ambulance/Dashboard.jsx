@@ -1,30 +1,65 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Navigation, Clock, CheckCircle2, Ambulance as AmbulanceIcon } from 'lucide-react'
 import { listAmbulances, myAssignments } from '../../services/api'
 import { AMBULANCE_STYLES, ASSIGNMENT_STYLES, formatTime } from '../../lib/status'
+import { useRealtime } from '../../hooks/useRealtime'
+import LiveBadge from '../../components/common/LiveBadge'
+import HospitalFinder from '../../components/common/HospitalFinder'
 
 export default function AmbulanceDashboard() {
   const [assignments, setAssignments] = useState([])
   const [fleet, setFleet] = useState([])
   const [error, setError] = useState('')
+  const [hospitalRefresh, setHospitalRefresh] = useState(0)
 
-  useEffect(() => {
-    Promise.all([myAssignments(), listAmbulances()])
+  const load = useCallback(() => {
+    return Promise.all([myAssignments(), listAmbulances()])
       .then(([asg, amb]) => {
         setAssignments(asg)
         setFleet(amb)
+        setError('')
       })
       .catch((e) =>
         setError(e.response?.data?.detail || 'Could not load ambulance data.')
       )
   }, [])
 
-  if (error) return <p className="text-red-400">{error}</p>
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const connected = useRealtime('ambulance', (message) => {
+    const type = message.type || ''
+    if (
+      type.startsWith('assignment.') ||
+      type === 'ambulance.moved' ||
+      type === 'fleet.updated'
+    ) {
+      load()
+    }
+    if (type.startsWith('hospital.')) {
+      setHospitalRefresh((n) => n + 1)
+    }
+  })
+
+  if (error && assignments.length === 0 && fleet.length === 0) {
+    return <p className="text-red-400">{error}</p>
+  }
 
   const available = fleet.filter((a) => a.status === 'AVAILABLE').length
   const enRoute = assignments.filter((a) => a.assignment_status === 'EN_ROUTE').length
   const arrived = assignments.filter((a) => a.assignment_status === 'ARRIVED').length
+
+  // Prefer the incident location when responding; otherwise use the crew vehicle.
+  const active = assignments[0]
+  const myVehicle = active ? fleet.find((a) => a.id === active.ambulance_id) : null
+  const origin =
+    active?.incident_latitude != null
+      ? { latitude: active.incident_latitude, longitude: active.incident_longitude }
+      : myVehicle?.latitude != null
+        ? { latitude: myVehicle.latitude, longitude: myVehicle.longitude }
+        : null
 
   const cards = [
     ['Active assignments', assignments.length, Navigation, 'text-sky-300'],
@@ -35,7 +70,11 @@ export default function AmbulanceDashboard() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold">Crew dashboard</h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-bold">Crew dashboard</h1>
+        <LiveBadge connected={connected} />
+        {error && <span className="text-xs text-amber-300">{error}</span>}
+      </div>
       <p className="text-sm text-slate-500">
         Simulated assignments dispatched by the control room.
       </p>
@@ -48,6 +87,18 @@ export default function AmbulanceDashboard() {
             <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
           </div>
         ))}
+      </div>
+
+      <div className="mt-4">
+        <HospitalFinder
+          origin={origin}
+          refreshKey={hospitalRefresh}
+          title={
+            active?.incident_latitude != null
+              ? 'Hospitals near the incident'
+              : 'Nearest hospitals'
+          }
+        />
       </div>
 
       <h2 className="mt-8 mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">

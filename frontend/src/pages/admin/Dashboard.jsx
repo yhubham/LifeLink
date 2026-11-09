@@ -1,26 +1,50 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Activity, Users, AlertTriangle, Clock } from 'lucide-react'
 import { getStats, listIncidents } from '../../services/api'
 import { STATUS_STYLES, formatTime } from '../../lib/status'
+import { useRealtime } from '../../hooks/useRealtime'
+import LiveBadge from '../../components/common/LiveBadge'
+import HospitalFinder from '../../components/common/HospitalFinder'
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null)
   const [recent, setRecent] = useState([])
   const [error, setError] = useState('')
+  const [hospitalRefresh, setHospitalRefresh] = useState(0)
 
-  useEffect(() => {
-    Promise.all([getStats(), listIncidents()])
+  const load = useCallback(() => {
+    return Promise.all([getStats(), listIncidents()])
       .then(([s, incidents]) => {
         setStats(s)
         setRecent(incidents.slice(0, 6))
+        setError('')
       })
       .catch((e) =>
         setError(e.response?.data?.detail || 'Could not load control-room data.')
       )
   }, [])
 
-  if (error) return <p className="text-red-400">{error}</p>
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const connected = useRealtime('admin', (message) => {
+    const type = message.type || ''
+    if (
+      type.startsWith('incident.') ||
+      type.startsWith('assignment.') ||
+      type === 'ambulance.moved' ||
+      type === 'fleet.updated'
+    ) {
+      load()
+    }
+    if (type.startsWith('hospital.')) {
+      setHospitalRefresh((n) => n + 1)
+    }
+  })
+
+  if (error && !stats) return <p className="text-red-400">{error}</p>
   if (!stats) return <p className="text-slate-500">Loading…</p>
 
   const cards = [
@@ -32,7 +56,11 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold">Overview</h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-bold">Overview</h1>
+        <LiveBadge connected={connected} />
+        {error && <span className="text-xs text-amber-300">{error}</span>}
+      </div>
       <p className="text-sm text-slate-500">Live picture of the simulated response network.</p>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -55,6 +83,10 @@ export default function Dashboard() {
             {status} · {count}
           </Link>
         ))}
+      </div>
+
+      <div className="mt-4">
+        <HospitalFinder refreshKey={hospitalRefresh} />
       </div>
 
       <div className="mt-8 grid gap-4 lg:grid-cols-3">

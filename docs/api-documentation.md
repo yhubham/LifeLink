@@ -117,17 +117,81 @@ Demo shortcut: there is no crew→ambulance link in the schema, so
 
 | Method | Endpoint | Auth | Function |
 |---|---|---|---|
-| GET | `/hospitals` | staff | Facilities with mock capacity |
+| GET | `/hospitals` | staff | Facilities with mock capacity + `open_alerts` |
+| GET | `/hospitals/nearby` | staff | Real-time finder: filters + nearest-first ranking (`?latitude=&longitude=&q=&specialty=&min_beds=&max_distance_km=&limit=`) |
 | GET | `/hospitals/match` | staff | Active hospitals with beds, nearest first (`?latitude=&longitude=&min_beds=&limit=`) |
 | PATCH | `/hospitals/{id}/capacity` | ADMIN, HOSPITAL | Update total/available beds |
 | POST | `/hospital-alerts` | ADMIN, AMBULANCE | Send a pre-alert (ETA + message) |
 | GET | `/hospital-alerts/incoming` | staff | Open alerts (`?include_acknowledged=true` for all) |
 | POST | `/hospital-alerts/{id}/acknowledge` | HOSPITAL, ADMIN | Accept the incoming patient |
 
+`/hospitals/nearby` powers the dashboard finder panel. It returns **active**
+hospitals only, filters by name (`q`), specialty, `min_beds` and
+`max_distance_km`, then sorts by distance when coordinates are supplied. Each
+row includes:
+
+```json
+{
+  "id": "uuid",
+  "name": "AIIMS Delhi",
+  "specialties": ["Trauma", "Cardiology", "Emergency"],
+  "total_beds": 200,
+  "available_beds": 50,
+  "open_alerts": 1,
+  "distance_km": 1.59,
+  "eta_minutes": 2
+}
+```
+
 `match` adds `distance_km` (haversine) and `eta_minutes` (simulated 40 km/h).
 Alerts embed the incident and its patients with latest triage priority. Only one
 open alert per incident/hospital pair (`409` on duplicates). Bed counts are mock
 data for the demonstration.
+
+## Realtime WebSockets
+
+Base: `ws://127.0.0.1:8000/api/v1/ws/...`. Authenticate with the same JWT via a
+query parameter because browsers cannot set headers on WebSocket handshakes:
+
+```
+ws://127.0.0.1:8000/api/v1/ws/admin?token=<JWT>
+```
+
+| Channel | Allowed roles | Used by |
+|---|---|---|
+| `/ws/admin` | ADMIN, POLICE, RESCUE | Control-room dashboard, incident list |
+| `/ws/ambulance` | AMBULANCE, ADMIN | Crew dashboard |
+| `/ws/hospital` | HOSPITAL, ADMIN | Hospital dashboard, alerts, capacity |
+| `/ws/incidents/{id}` | any staff | Incident detail (admin + crew views) |
+
+The server sends a `connected` frame on subscribe, then event frames:
+
+```json
+{"type": "assignment.updated", "payload": {"incident_id": "uuid", "status": "EN_ROUTE"}, "at": "2026-11-09T10:00:00+00:00"}
+```
+
+Events published today: `incident.created`, `incident.updated`,
+`assignment.updated`, `ambulance.moved`, `fleet.updated`, `patient.added`,
+`hospital.alert`, `hospital.alert_acknowledged`, `hospital.capacity_updated`.
+`hospital.alert` and `hospital.alert_acknowledged` are also published to
+`incidents/{id}` so the control-room and crew incident pages see pre-alert
+status change without a reload.
+Clients send a periodic `ping` text frame to keep the socket alive; the frontend
+reconnects automatically with exponential backoff.
+
+> The hub is process-local (`app/services/realtime.py`) and intended for the
+> single-worker demo. A production deployment would use Redis pub/sub.
+
+## Testing
+
+```bash
+cd backend
+uv run pytest -q
+```
+
+The suite uses in-memory SQLite (no Postgres required) and covers login/roles,
+WebSocket channel auth, the full dispatch → arrived → complete flow, triage,
+pre-alert acknowledgement, capacity validation and `/hospitals/nearby` filters.
 
 ## Public call button
 
@@ -137,15 +201,10 @@ Every public page (landing, emergency, report, track, guidance) shows a floating
 currently `859505879` exactly as supplied (9 digits; update the constant if the
 full number differs).
 
-## Not yet implemented (planned week 6)
-
-WebSocket channels (`/ws/admin`, `/ws/ambulance`, `/ws/hospital`,
-`/ws/incidents/{id}`), media uploads, API test suite, deployment.
-
 ## Error codes
 
 - `401` missing/invalid token
 - `403` insufficient role
 - `404` not found
-- `409` invalid status transition / duplicate email
+- `409` invalid status transition / duplicate email / open pre-alert exists
 - `422` validation error (FastAPI/pydantic detail array)

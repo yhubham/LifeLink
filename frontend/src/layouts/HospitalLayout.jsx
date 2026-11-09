@@ -8,6 +8,7 @@ import {
   HeartPulse,
 } from 'lucide-react'
 import { useAuthStore } from '../context/authStore'
+import MobileNav from '../components/common/MobileNav'
 
 const NAV = [
   ['/hospital/dashboard', 'Dashboard', LayoutDashboard],
@@ -66,19 +67,21 @@ export default function HospitalLayout() {
       </aside>
 
       <div className="flex-1">
-        <header className="flex items-center gap-3 border-b border-navy-800 bg-navy-950/80 px-6 py-4">
+        <header className="flex flex-wrap items-center gap-3 border-b border-navy-800 bg-navy-950/80 px-4 py-4 md:px-6">
           <span className="text-sm font-semibold text-slate-300">Hospital coordination</span>
           <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-bold text-emerald-400">
             SIMULATION LIVE
           </span>
-          <span className="ml-auto text-xs text-slate-500">
+          <span className="ml-auto hidden text-xs text-slate-500 sm:inline">
             Capacity and pre-alerts are simulated
           </span>
         </header>
-        <main className="p-6">
+        <main className="p-4 pb-24 md:p-6">
           <Outlet />
         </main>
       </div>
+
+      <MobileNav items={NAV} activeClass="text-emerald-300" />
     </div>
   )
 }

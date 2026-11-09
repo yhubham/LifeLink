@@ -22,6 +22,8 @@ import {
   STATUS_STYLES,
   formatTime,
 } from '../../lib/status'
+import { useRealtime } from '../../hooks/useRealtime'
+import LiveBadge from '../../components/common/LiveBadge'
 
 const ANSWER_FIELDS = [
   ['airway', 'Airway', ['clear', 'obstructed']],
@@ -144,6 +146,7 @@ export default function IncidentDetail() {
   const [incident, setIncident] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [tick, setTick] = useState(0)
 
   function load() {
     getIncident(id)
@@ -155,6 +158,20 @@ export default function IncidentDetail() {
   }
 
   useEffect(load, [id])
+
+  const connected = useRealtime(`incidents/${id}`, (message) => {
+    const type = message.type || ''
+    if (
+      type.startsWith('incident.') ||
+      type.startsWith('assignment.') ||
+      type.startsWith('hospital.') ||
+      type === 'ambulance.moved' ||
+      type === 'patient.added'
+    ) {
+      load()
+      setTick((n) => n + 1)
+    }
+  })
 
   async function act(fn) {
     setBusy(true)
@@ -183,6 +200,7 @@ export default function IncidentDetail() {
         <span className={`rounded border px-2.5 py-0.5 text-xs font-bold ${STATUS_STYLES[incident.status]}`}>
           {incident.status}
         </span>
+        <LiveBadge connected={connected} />
         <span className="text-slate-400">{incident.incident_type}</span>
         <span className="text-xs text-slate-500">{formatTime(incident.reported_at)}</span>
         <div className="ml-auto flex gap-2">
@@ -217,8 +235,8 @@ export default function IncidentDetail() {
       )}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <AssignmentPanel incident={incident} />
-        <PreAlertPanel incident={incident} />
+        <AssignmentPanel incident={incident} tick={tick} />
+        <PreAlertPanel incident={incident} tick={tick} />
       </div>
 
       <h2 className="mt-8 text-sm font-bold uppercase tracking-wide text-slate-400">
@@ -236,7 +254,7 @@ export default function IncidentDetail() {
   )
 }
 
-function AssignmentPanel({ incident }) {
+function AssignmentPanel({ incident, tick }) {
   const [assignments, setAssignments] = useState([])
   const [fleet, setFleet] = useState([])
   const [ambulanceId, setAmbulanceId] = useState('')
@@ -265,7 +283,7 @@ function AssignmentPanel({ incident }) {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incident.id])
+  }, [incident.id, tick])
 
   const active = assignments.find(
     (a) => !['COMPLETED', 'CANCELLED'].includes(a.assignment_status)
@@ -407,7 +425,7 @@ function AssignmentPanel({ incident }) {
   )
 }
 
-function PreAlertPanel({ incident }) {
+function PreAlertPanel({ incident, tick }) {
   const [hospitals, setHospitals] = useState([])
   const [hospitalId, setHospitalId] = useState('')
   const [alerts, setAlerts] = useState([])
@@ -429,12 +447,12 @@ function PreAlertPanel({ incident }) {
     matchHospitals(incident.latitude, incident.longitude)
       .then((list) => {
         setHospitals(list)
-        setHospitalId(list[0]?.id || '')
+        setHospitalId((prev) => prev || list[0]?.id || '')
       })
       .catch((e) => setError(e.response?.data?.detail || 'Could not load hospitals.'))
     loadAlerts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incident.id])
+  }, [incident.id, tick])
 
   const selected = hospitals.find((h) => h.id === hospitalId)
 
