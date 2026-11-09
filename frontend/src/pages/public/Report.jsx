@@ -84,7 +84,11 @@ export default function Report() {
             Track incident
           </Link>
           <Link
-            to="/emergency/guidance"
+            to={
+              created.patients?.length
+                ? `/emergency/guidance/${created.patients[0].id}`
+                : '/emergency/guidance'
+            }
             className="rounded-lg border border-navy-700 px-5 py-3 font-semibold hover:bg-navy-800"
           >
             First-aid guidance

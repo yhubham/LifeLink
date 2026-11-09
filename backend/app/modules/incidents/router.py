@@ -51,7 +51,7 @@ def _get_incident(db, incident_id: uuid.UUID) -> Incident:
     return incident
 
 
-@router.post("/incidents", response_model=IncidentOut, status_code=201)
+@router.post("/incidents", response_model=IncidentDetailOut, status_code=201)
 def create_incident(body: IncidentCreate, db: DbDep):
     """Public SOS reporting — no staff account required."""
     incident = Incident(
