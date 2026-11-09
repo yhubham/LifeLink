@@ -7,8 +7,9 @@ from app.models.ambulance import (
     AssignmentStatus,
 )
 from app.models.audit import AuditLog
+from app.models.call import CallParticipant, CallSession, CallStatus
 from app.models.hospital import AlertStatus, Hospital, HospitalAlert
-from app.models.incident import Incident, IncidentMedia, IncidentStatus
+from app.models.incident import Incident, IncidentEvent, IncidentMedia, IncidentStatus
 from app.models.patient import (
     FirstAidSession,
     Patient,
@@ -22,6 +23,7 @@ __all__ = [
     "User",
     "UserRole",
     "Incident",
+    "IncidentEvent",
     "IncidentMedia",
     "IncidentStatus",
     "Patient",
@@ -37,4 +39,7 @@ __all__ = [
     "HospitalAlert",
     "AlertStatus",
     "AuditLog",
+    "CallSession",
+    "CallParticipant",
+    "CallStatus",
 ]

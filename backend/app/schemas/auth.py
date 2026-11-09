@@ -16,6 +16,9 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     role: UserRole
     full_name: str
+    user_id: uuid.UUID
+    dashboards: list[str] = []
+    default_dashboard: str = "admin"
 
 
 class UserCreate(BaseModel):
@@ -33,4 +36,6 @@ class UserOut(BaseModel):
     email: EmailStr
     role: UserRole
     is_active: bool
+    dashboards: list[str] = []
+    default_dashboard: str = "admin"
     created_at: datetime

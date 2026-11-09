@@ -13,9 +13,10 @@ function wsBase() {
  * @param {(message: {type: string, payload: object, at: string}) => void} onEvent
  * @returns {boolean} whether the socket is currently connected
  */
-export function useRealtime(channel, onEvent) {
+export function useRealtime(channel, onEvent, options = {}) {
   const [connected, setConnected] = useState(false)
   const handlerRef = useRef(onEvent)
+  const { token: tokenOverride = null, path = null } = options
 
   useEffect(() => {
     handlerRef.current = onEvent
@@ -23,7 +24,7 @@ export function useRealtime(channel, onEvent) {
 
   useEffect(() => {
     if (!channel) return undefined
-    const token = getStoredToken()
+    const token = tokenOverride || getStoredToken()
     if (!token) return undefined
 
     let socket
@@ -34,7 +35,7 @@ export function useRealtime(channel, onEvent) {
 
     const connect = () => {
       socket = new WebSocket(
-        `${wsBase()}/ws/${channel}?token=${encodeURIComponent(token)}`
+        `${wsBase()}/ws/${path || channel}?token=${encodeURIComponent(token)}`
       )
 
       socket.onopen = () => {
@@ -73,7 +74,7 @@ export function useRealtime(channel, onEvent) {
       clearInterval(pingTimer)
       socket?.close()
     }
-  }, [channel])
+  }, [channel, tokenOverride, path])
 
   return connected
 }

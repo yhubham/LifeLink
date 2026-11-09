@@ -54,6 +54,16 @@ def test_incident_channel_requires_any_staff_token(client):
         assert message["channel"].startswith("incidents/")
 
 
+def test_call_signaling_socket_is_not_shadowed_by_channel_route(client):
+    token = _token(client, "admin@lifelink.demo")
+    with client.websocket_connect(
+        f"/api/v1/ws/calls?token={token}"
+    ) as websocket:
+        message = websocket.receive_json()
+        assert message["type"] == "connected"
+        assert message["channel"].startswith("user/")
+
+
 class FakeWebSocket:
     def __init__(self):
         self.accepted = False

@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Navigation,
+  PhoneCall,
   Play,
   Square,
   Stethoscope,
@@ -21,6 +22,8 @@ import {
 } from '../../lib/status'
 import { useRealtime } from '../../hooks/useRealtime'
 import LiveBadge from '../../components/common/LiveBadge'
+import MediaGallery from '../../components/incidents/MediaGallery'
+import { requestCall } from '../../components/calls/requestCall'
 
 export default function AmbulanceIncident() {
   const { id } = useParams()
@@ -128,14 +131,50 @@ export default function AmbulanceIncident() {
         )}
       </div>
 
-      <p className="mt-3 text-sm text-slate-400">
-        📍 {incident.address || `${incident.latitude.toFixed(5)}, ${incident.longitude.toFixed(5)}`}
-      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-400">
+        <span>
+          📍{' '}
+          {incident.address ||
+            `${incident.latitude.toFixed(5)}, ${incident.longitude.toFixed(5)}`}
+        </span>
+        <a
+          href={`https://www.openstreetmap.org/directions?to=${incident.latitude}%2C${incident.longitude}`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1 rounded-lg border border-navy-700 px-2 py-1 text-xs font-semibold text-sky-300 hover:bg-navy-800"
+        >
+          <Navigation size={12} /> Open navigation
+        </a>
+        {incident.injured_count != null && (
+          <span className="rounded border border-navy-700 px-2 py-1 text-xs text-slate-300">
+            {incident.injured_count} injured reported
+          </span>
+        )}
+      </div>
+      {incident.landmark && (
+        <p className="mt-1 text-xs text-slate-500">
+          Landmark: <span className="text-slate-300">{incident.landmark}</span>
+        </p>
+      )}
       {incident.description && (
         <p className="mt-2 max-w-2xl rounded-lg border border-navy-800 bg-navy-900 p-3 text-sm text-slate-300">
           {incident.description}
         </p>
       )}
+
+      {assignment && !finished && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => requestCall(incident.id)}
+            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500"
+          >
+            <PhoneCall size={14} /> Call control room
+          </button>
+        </div>
+      )}
+
+      <MediaGallery incidentId={incident.id} title="Scene photos from the reporter" />
 
       {!assignment && (
         <p className="mt-6 rounded-xl border border-amber-700/60 bg-amber-950/30 p-4 text-sm text-amber-300">

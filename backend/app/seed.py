@@ -9,13 +9,14 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
-from app.core.security import hash_password
+from app.core.security import hash_password, hash_pin
 from app.database.session import SessionLocal
 from app.models import (
     Ambulance,
     AmbulanceStatus,
     Hospital,
     Incident,
+    IncidentEvent,
     IncidentStatus,
     Patient,
     PriorityLevel,
@@ -25,6 +26,9 @@ from app.models import (
 )
 
 DEMO_PASSWORD = "Demo@1234"
+# All seeded demo tickets share this PIN so the college demo is repeatable.
+# Runtime reports still receive a random one-time PIN.
+DEMO_TICKET_PIN = "246810"
 
 USERS = [
     ("Control Room Admin", "admin@lifelink.demo", UserRole.ADMIN),
@@ -208,6 +212,26 @@ def seed() -> None:
                     role=role,
                 )
             )
+        db.flush()
+
+        # The control-room admin is explicitly authorized for all three
+        # dashboards so the switcher can be demonstrated. Crew/hospital
+        # accounts stay limited to their own role dashboard.
+        admin = db.scalar(
+            select(User).where(User.email == "admin@lifelink.demo")
+        )
+        if admin is not None and not admin.dashboard_access:
+            admin.dashboard_access = ["admin", "ambulance", "hospital"]
+
+        crew_links = {
+            "AMB-01": "crew1@lifelink.demo",
+            "AMB-02": "crew2@lifelink.demo",
+        }
+        crew_ids = {}
+        for email in crew_links.values():
+            crew = db.scalar(select(User).where(User.email == email))
+            if crew is not None:
+                crew_ids[email] = crew.id
 
         for name, lat, lon, beds, specs in HOSPITALS:
             if db.scalar(select(Hospital).where(Hospital.name == name)):
@@ -226,7 +250,14 @@ def seed() -> None:
             )
 
         for call_sign, vehicle, lat, lon in AMBULANCES:
-            if db.scalar(select(Ambulance).where(Ambulance.call_sign == call_sign)):
+            crew_email = crew_links.get(call_sign)
+            crew_id = crew_ids.get(crew_email) if crew_email else None
+            existing = db.scalar(
+                select(Ambulance).where(Ambulance.call_sign == call_sign)
+            )
+            if existing is not None:
+                if crew_id is not None and existing.crew_user_id is None:
+                    existing.crew_user_id = crew_id
                 continue
             db.add(
                 Ambulance(
@@ -236,6 +267,7 @@ def seed() -> None:
                     status=AmbulanceStatus.AVAILABLE,
                     latitude=lat,
                     longitude=lon,
+                    crew_user_id=crew_id,
                 )
             )
 
@@ -243,7 +275,15 @@ def seed() -> None:
         incidents_created = 0
         for spec in DEMO_INCIDENTS:
             public_code = f"LL-{year}-{spec['suffix']:04d}"
-            if db.scalar(select(Incident).where(Incident.public_code == public_code)):
+            existing = db.scalar(
+                select(Incident).where(Incident.public_code == public_code)
+            )
+            if existing is not None:
+                # Backfill demo ticket access for rows created before the
+                # secure-ticket feature existed.
+                if existing.ticket_pin_hash is None:
+                    existing.ticket_pin_hash = hash_pin(DEMO_TICKET_PIN)
+                    existing.ticket_created_at = existing.reported_at
                 continue
 
             reported_at = datetime.now(UTC) - timedelta(
@@ -257,6 +297,8 @@ def seed() -> None:
                 latitude=spec["latitude"],
                 longitude=spec["longitude"],
                 address=spec["address"],
+                landmark=spec.get("landmark"),
+                injured_count=len(spec["patients"]),
                 status=spec["status"],
                 reported_at=reported_at,
                 closed_at=(
@@ -264,9 +306,21 @@ def seed() -> None:
                     if spec["status"] == IncidentStatus.CLOSED
                     else None
                 ),
+                ticket_pin_hash=hash_pin(DEMO_TICKET_PIN),
+                ticket_created_at=reported_at,
             )
             db.add(incident)
             db.flush()
+            db.add(
+                IncidentEvent(
+                    id=uuid.uuid4(),
+                    incident_id=incident.id,
+                    event_type="reported",
+                    message="Incident reported",
+                    status=IncidentStatus.REPORTED.value,
+                    created_at=reported_at,
+                )
+            )
 
             for (
                 name,
@@ -310,6 +364,7 @@ def seed() -> None:
         db.commit()
         print("Seed complete.")
         print(f"  Demo login: admin@lifelink.demo / {DEMO_PASSWORD} (and 4 more users)")
+        print(f"  Demo ticket PIN for seeded incidents: {DEMO_TICKET_PIN}")
         print(
             f"  Hospitals: {len(HOSPITALS)}  Ambulances: {len(AMBULANCES)}  "
             f"Demo incidents: {len(DEMO_INCIDENTS)} (+{incidents_created} new)"

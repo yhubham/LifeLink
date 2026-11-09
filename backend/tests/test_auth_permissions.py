@@ -80,3 +80,44 @@ def test_admin_can_create_fleet_unit(client, admin_headers):
     )
     assert response.status_code == 201
     assert response.json()["call_sign"] == "AMB-T1"
+
+
+def test_admin_dashboard_defaults_to_admin_only(client):
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@lifelink.demo", "password": PASSWORD},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dashboards"] == ["admin"]
+    assert body["default_dashboard"] == "admin"
+    assert body["user_id"]
+
+
+def test_admin_can_be_explicitly_granted_multiple_dashboards(client, db):
+    from app.models import User
+
+    admin = db.query(User).filter(User.email == "admin@lifelink.demo").one()
+    admin.dashboard_access = ["admin", "ambulance", "hospital"]
+    db.commit()
+
+    body = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@lifelink.demo", "password": PASSWORD},
+    ).json()
+    assert body["dashboards"] == ["admin", "ambulance", "hospital"]
+
+
+def test_non_admin_cannot_widen_dashboard_scope(client, db):
+    from app.models import User
+
+    crew = db.query(User).filter(User.email == "crew1@lifelink.demo").one()
+    crew.dashboard_access = ["ambulance", "admin", "hospital"]
+    db.commit()
+
+    body = client.post(
+        "/api/v1/auth/login",
+        json={"email": "crew1@lifelink.demo", "password": PASSWORD},
+    ).json()
+    assert body["dashboards"] == ["ambulance"]
+    assert body["default_dashboard"] == "ambulance"

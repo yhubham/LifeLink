@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Siren, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import CallButton from '../../components/common/CallButton'
 import { useReportStore } from '../../context/reportStore'
 
 export default function Emergency() {
   const navigate = useNavigate()
   const setLocation = useReportStore((s) => s.setLocation)
+  const reset = useReportStore((s) => s.reset)
   const [status, setStatus] = useState('idle') // idle | locating | denied
 
   function handleSOS() {
     if (!navigator.geolocation) {
-      setStatus('denied')
+      reset()
+      navigate('/emergency/report?location=denied')
       return
     }
     setStatus('locating')
@@ -21,9 +23,11 @@ export default function Emergency() {
         navigate('/emergency/report')
       },
       () => {
-        // Fallback: Delhi centre so the demo still works without GPS permission
-        setLocation(28.6139, 77.209, 'Location permission denied — default (New Delhi)')
-        navigate('/emergency/report')
+        // No hardcoded fallback coordinates: let the reporter enter the spot
+        // manually on the report form.
+        reset()
+        setStatus('denied')
+        navigate('/emergency/report?location=denied')
       },
       { enableHighAccuracy: true, timeout: 10000 }
     )
@@ -54,7 +58,7 @@ export default function Emergency() {
       </p>
       {status === 'denied' && (
         <p className="mt-3 text-sm text-amber-400">
-          Using default location (New Delhi).
+          Location unavailable — enter it manually on the report form.
         </p>
       )}
       <button

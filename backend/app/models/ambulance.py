@@ -47,6 +47,11 @@ class Ambulance(Base):
     last_location_update: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Which crew account currently drives this unit. Used to target voice
+    # calls at the responder assigned to an incident.
+    crew_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
 
 
 class AmbulanceAssignment(Base):

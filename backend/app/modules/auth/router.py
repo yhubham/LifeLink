@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbDep, require_roles
+from app.core.dashboards import allowed_dashboards, default_dashboard
 from app.core.security import (
     create_access_token,
     hash_password,
@@ -32,6 +33,9 @@ def login(body: LoginRequest, db: DbDep):
         access_token=token,
         role=user.role,
         full_name=user.full_name,
+        user_id=user.id,
+        dashboards=allowed_dashboards(user),
+        default_dashboard=default_dashboard(user),
     )
 
 

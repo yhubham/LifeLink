@@ -21,3 +21,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Private incident media (uploads stay on the server, never in git)
+backend/storage/
+
+# Local Alembic scratch databases
+backend/.alembic_tmp.db

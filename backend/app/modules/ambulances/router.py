@@ -18,6 +18,7 @@ from app.models import (
 )
 from app.models.user import utcnow
 from app.services.geo import eta_minutes, haversine_km, move_towards
+from app.services.incident_events import add_event
 from app.services.realtime import publish
 
 router = APIRouter(tags=["ambulances"])
@@ -33,6 +34,7 @@ class AmbulanceCreate(BaseModel):
     vehicle_number: str | None = None
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
+    crew_user_id: uuid.UUID | None = None
 
 
 class LocationUpdate(BaseModel):
@@ -58,6 +60,7 @@ def _ambulance_dict(a: Ambulance) -> dict:
         "latitude": a.latitude,
         "longitude": a.longitude,
         "last_location_update": a.last_location_update,
+        "crew_user_id": a.crew_user_id,
     }
 
 
@@ -120,6 +123,7 @@ def create_ambulance(
         status=AmbulanceStatus.AVAILABLE,
         latitude=body.latitude,
         longitude=body.longitude,
+        crew_user_id=body.crew_user_id,
     )
     db.add(ambulance)
     db.add(
@@ -200,15 +204,26 @@ def list_assignments(
 @router.get("/assignments/mine")
 def my_assignments(
     db: DbDep,
-    _: User = Depends(require_roles("AMBULANCE", "ADMIN")),
+    user: User = Depends(require_roles("AMBULANCE", "ADMIN")),
 ):
-    """Demo behaviour: there is no per-crew ambulance link, so crews see all
-    active assignments in the simulated fleet."""
+    """Assignments for this crew, matched through ``Ambulance.crew_user_id``.
+
+    Legacy demo rows without a crew link remain visible to crews so the seeded
+    simulation keeps working.
+    """
     stmt = (
         select(AmbulanceAssignment)
         .where(AmbulanceAssignment.assignment_status.in_(ACTIVE))
         .order_by(AmbulanceAssignment.assigned_at.desc())
     )
+    if user.role.value == "AMBULANCE":
+        ambulance_ids = db.scalars(
+            select(Ambulance.id).where(
+                (Ambulance.crew_user_id == user.id)
+                | (Ambulance.crew_user_id.is_(None))
+            )
+        ).all()
+        stmt = stmt.where(AmbulanceAssignment.ambulance_id.in_(ambulance_ids))
     return [_assignment_dict(db, a) for a in db.scalars(stmt).all()]
 
 
@@ -254,6 +269,14 @@ def create_assignment(
     ambulance.status = AmbulanceStatus.ASSIGNED
     incident.status = IncidentStatus.ASSIGNED
     db.add(assignment)
+    add_event(
+        db,
+        incident.id,
+        "assigned",
+        f"Ambulance {ambulance.call_sign} assigned",
+        status=IncidentStatus.ASSIGNED.value,
+        actor_id=user.id,
+    )
     db.add(
         AuditLog(
             user_id=user.id,
@@ -269,7 +292,7 @@ def create_assignment(
     db.commit()
     db.refresh(assignment)
     publish(
-        ["admin", "ambulance", f"incidents/{incident.id}"],
+        ["admin", "ambulance", f"incidents/{incident.id}", f"tickets/{incident.id}"],
         "assignment.updated",
         {
             "assignment_id": str(assignment.id),
@@ -349,10 +372,31 @@ def update_assignment(
             details={"status": new_status.value},
         )
     )
+    event_messages = {
+        AssignmentStatus.ACCEPTED: "Crew accepted the assignment",
+        AssignmentStatus.EN_ROUTE: "Ambulance responding to the incident",
+        AssignmentStatus.ARRIVED: "Ambulance arrived on scene",
+        AssignmentStatus.COMPLETED: "Assignment completed",
+        AssignmentStatus.CANCELLED: "Assignment cancelled",
+    }
+    if new_status in event_messages:
+        add_event(
+            db,
+            assignment.incident_id,
+            f"assignment_{new_status.value.lower()}",
+            event_messages[new_status],
+            status=incident.status.value if incident else None,
+            actor_id=user.id,
+        )
     db.commit()
     db.refresh(assignment)
     publish(
-        ["admin", "ambulance", f"incidents/{assignment.incident_id}"],
+        [
+            "admin",
+            "ambulance",
+            f"incidents/{assignment.incident_id}",
+            f"tickets/{assignment.incident_id}",
+        ],
         "assignment.updated",
         {
             "assignment_id": str(assignment.id),
@@ -429,6 +473,14 @@ def simulate_step(
         assignment.arrival_at = utcnow()
         ambulance.status = AmbulanceStatus.ON_SCENE
         incident.status = IncidentStatus.ARRIVED
+        add_event(
+            db,
+            incident.id,
+            "arrived",
+            "Ambulance arrived on scene",
+            status=IncidentStatus.ARRIVED.value,
+            actor_id=user.id,
+        )
     else:
         assignment.assignment_status = AssignmentStatus.EN_ROUTE
         ambulance.status = AmbulanceStatus.EN_ROUTE
@@ -456,7 +508,7 @@ def simulate_step(
     db.refresh(assignment)
     db.refresh(ambulance)
     publish(
-        ["admin", "ambulance", f"incidents/{incident.id}"],
+        ["admin", "ambulance", f"incidents/{incident.id}", f"tickets/{incident.id}"],
         "ambulance.moved",
         {
             "assignment_id": str(assignment.id),

@@ -4,6 +4,11 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1',
 })
 
+// Public flow (ticket PIN/token, OSM discovery, reporter image uploads).
+const publicApi = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1',
+})
+
 // Attach the staff JWT (persisted by the auth store) to every request.
 api.interceptors.request.use((config) => {
   try {
@@ -36,6 +41,58 @@ export async function createIncident(payload) {
 
 export async function trackIncident(publicCode) {
   const { data } = await api.get(`/incidents/track/${publicCode}`)
+  return data
+}
+
+export async function discoverHospitals(params) {
+  const { data } = await publicApi.get('/hospitals/discover', { params })
+  return data
+}
+
+export async function accessTicket(publicCode, pin) {
+  const { data } = await publicApi.post('/incidents/ticket/access', {
+    public_code: publicCode,
+    pin,
+  })
+  return data
+}
+
+export async function getTicket(publicCode, ticketToken) {
+  const { data } = await publicApi.get(`/incidents/ticket/${publicCode}`, {
+    headers: { Authorization: `Bearer ${ticketToken}` },
+  })
+  return data
+}
+
+export async function uploadIncidentMedia(
+  incidentId,
+  file,
+  ticketToken,
+  onUploadProgress
+) {
+  const form = new FormData()
+  form.append('file', file)
+  const { data } = await publicApi.post(
+    `/incidents/${incidentId}/media`,
+    form,
+    {
+      headers: { 'X-Ticket-Token': ticketToken },
+      onUploadProgress,
+    }
+  )
+  return data
+}
+
+export async function listIncidentMedia(incidentId) {
+  const { data } = await api.get(`/incidents/${incidentId}/media`)
+  return data
+}
+
+export async function fetchIncidentMedia(incidentId, mediaId) {
+  const { data } = await api.get(
+    `/incidents/${incidentId}/media/${mediaId}/file`,
+    { responseType: 'blob' }
+  )
   return data
 }
 
@@ -125,6 +182,58 @@ export async function incomingAlerts(includeAcknowledged = false) {
 
 export async function acknowledgeAlert(id) {
   const { data } = await api.post(`/hospital-alerts/${id}/acknowledge`)
+  return data
+}
+
+export async function acknowledgeArrival(id) {
+  const { data } = await api.post(`/hospital-alerts/${id}/arrival`)
+  return data
+}
+
+export async function createCall(payload) {
+  const { data } = await api.post('/calls', payload)
+  return data
+}
+
+export async function getActiveCalls() {
+  const { data } = await api.get('/calls/active')
+  return data
+}
+
+export async function getCallById(id) {
+  const { data } = await api.get(`/calls/${id}`)
+  return data
+}
+
+export async function getCallHistory(incidentId) {
+  const { data } = await api.get('/calls/history', {
+    params: incidentId ? { incident_id: incidentId } : {},
+  })
+  return data
+}
+
+export async function acceptCall(id) {
+  const { data } = await api.post(`/calls/${id}/accept`)
+  return data
+}
+
+export async function rejectCall(id) {
+  const { data } = await api.post(`/calls/${id}/reject`)
+  return data
+}
+
+export async function endCall(id) {
+  const { data } = await api.post(`/calls/${id}/end`)
+  return data
+}
+
+export async function failCall(id, reason = 'connection_failed') {
+  const { data } = await api.post(`/calls/${id}/failed`, { reason })
+  return data
+}
+
+export async function getIceConfig() {
+  const { data } = await api.get('/calls/ice-config')
   return data
 }
 

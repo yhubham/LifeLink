@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
@@ -11,12 +11,18 @@ from app.models import (
     Hospital,
     HospitalAlert,
     Incident,
+    IncidentStatus,
     Patient,
     TriageRecord,
     User,
 )
 from app.models.user import utcnow
 from app.services.geo import eta_minutes, haversine_km
+from app.services.hospital_discovery import (
+    OverpassUnavailable,
+    discover_hospitals,
+)
+from app.services.incident_events import add_event
 from app.services.realtime import publish
 
 router = APIRouter(tags=["hospitals"])
@@ -93,6 +99,7 @@ def _alert_dict(db, alert: HospitalAlert) -> dict:
         "message": alert.message,
         "created_at": alert.created_at,
         "acknowledged_at": alert.acknowledged_at,
+        "arrival_acknowledged_at": alert.arrival_acknowledged_at,
         "hospital": {
             "id": hospital.id,
             "name": hospital.name,
@@ -137,6 +144,69 @@ def _open_alert_counts(db) -> dict[uuid.UUID, int]:
         .group_by(HospitalAlert.hospital_id)
     ).all()
     return {hospital_id: count for hospital_id, count in rows}
+
+
+@router.get("/hospitals/discover")
+def discover_nearby_hospitals(
+    db: DbDep,
+    latitude: float = Query(ge=-90, le=90),
+    longitude: float = Query(ge=-180, le=180),
+    radius_m: int = Query(default=8000, ge=500, le=20000),
+    limit: int = Query(default=20, ge=1, le=50),
+):
+    """Public OSM discovery for the report page (no staff login required).
+
+    Rows are explicitly marked as unverified for bed availability. If an OSM
+    result can be matched to a registered LifeLink hospital, that hospital's
+    live capacity is attached and ``availability_verified`` becomes true.
+    """
+    try:
+        rows = discover_hospitals(latitude, longitude, radius_m, limit)
+    except OverpassUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+
+    registered = db.scalars(select(Hospital).where(Hospital.is_active.is_(True))).all()
+    for row in rows:
+        match = None
+        for hospital in registered:
+            same_name = hospital.name.strip().casefold() == row["name"].strip().casefold()
+            close = (
+                haversine_km(
+                    row["latitude"],
+                    row["longitude"],
+                    hospital.latitude,
+                    hospital.longitude,
+                )
+                <= 0.35
+            )
+            if same_name or close:
+                match = hospital
+                break
+        if match is not None:
+            row["registered_hospital_id"] = str(match.id)
+            row["available_beds"] = match.available_beds
+            row["total_beds"] = match.total_beds
+            row["specialties"] = match.specialties or []
+            row["availability_verified"] = True
+        else:
+            row["registered_hospital_id"] = None
+            row["available_beds"] = None
+            row["total_beds"] = None
+            row["specialties"] = []
+            row["availability_verified"] = False
+
+    return {
+        "results": rows,
+        "count": len(rows),
+        "source": "OpenStreetMap / Overpass",
+        "availability_note": (
+            "Discovered hospitals are real OSM places but their bed availability "
+            "is not verified. Only registered hospitals with live capacity show "
+            "verified bed counts."
+        ),
+    }
 
 
 @router.get("/hospitals/nearby")
@@ -306,6 +376,13 @@ def create_alert(
         message=body.message,
     )
     db.add(alert)
+    add_event(
+        db,
+        incident.id,
+        "hospital_pre_alert",
+        f"Pre-alert sent to {hospital.name}",
+        actor_id=user.id,
+    )
     db.add(
         AuditLog(
             user_id=user.id,
@@ -322,7 +399,13 @@ def create_alert(
     db.commit()
     db.refresh(alert)
     publish(
-        ["admin", "hospital", "ambulance", f"incidents/{incident.id}"],
+        [
+            "admin",
+            "hospital",
+            "ambulance",
+            f"incidents/{incident.id}",
+            f"tickets/{incident.id}",
+        ],
         "hospital.alert",
         {
             "alert_id": str(alert.id),
@@ -363,6 +446,13 @@ def acknowledge_alert(
         return _alert_dict(db, alert)
     alert.alert_status = AlertStatus.ACKNOWLEDGED
     alert.acknowledged_at = utcnow()
+    add_event(
+        db,
+        alert.incident_id,
+        "hospital_alert_acknowledged",
+        "Hospital acknowledged the pre-alert",
+        actor_id=user.id,
+    )
     db.add(
         AuditLog(
             user_id=user.id,
@@ -374,7 +464,13 @@ def acknowledge_alert(
     db.commit()
     db.refresh(alert)
     publish(
-        ["admin", "hospital", "ambulance", f"incidents/{alert.incident_id}"],
+        [
+            "admin",
+            "hospital",
+            "ambulance",
+            f"incidents/{alert.incident_id}",
+            f"tickets/{alert.incident_id}",
+        ],
         "hospital.alert_acknowledged",
         {
             "alert_id": str(alert.id),
@@ -382,4 +478,63 @@ def acknowledge_alert(
             "hospital_id": str(alert.hospital_id),
         },
     )
+    return _alert_dict(db, alert)
+
+
+@router.post("/hospital-alerts/{alert_id}/arrival")
+def acknowledge_arrival(
+    alert_id: uuid.UUID,
+    db: DbDep,
+    user: User = Depends(require_roles("HOSPITAL", "ADMIN")),
+):
+    """Hospital confirms the patient physically arrived at its emergency desk."""
+    alert = db.get(HospitalAlert, alert_id)
+    if alert is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found"
+        )
+    incident = db.get(Incident, alert.incident_id)
+    if incident is not None and incident.status not in (
+        IncidentStatus.ARRIVED,
+        IncidentStatus.CLOSED,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The ambulance has not arrived at the incident scene yet",
+        )
+    if alert.arrival_acknowledged_at is None:
+        alert.arrival_acknowledged_at = utcnow()
+        alert.arrival_acknowledged_by = user.id
+        add_event(
+            db,
+            alert.incident_id,
+            "hospital_arrival_acknowledged",
+            "Hospital confirmed patient arrival",
+            actor_id=user.id,
+        )
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                action="hospital.arrival_acknowledged",
+                entity_type="hospital_alert",
+                entity_id=alert.id,
+            )
+        )
+        db.commit()
+        db.refresh(alert)
+        publish(
+            [
+                "admin",
+                "hospital",
+                "ambulance",
+                f"incidents/{alert.incident_id}",
+                f"tickets/{alert.incident_id}",
+            ],
+            "hospital.arrival_acknowledged",
+            {
+                "alert_id": str(alert.id),
+                "incident_id": str(alert.incident_id),
+                "hospital_id": str(alert.hospital_id),
+            },
+        )
     return _alert_dict(db, alert)

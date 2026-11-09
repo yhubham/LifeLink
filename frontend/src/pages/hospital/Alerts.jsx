@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, RefreshCw, Siren } from 'lucide-react'
-import { acknowledgeAlert, incomingAlerts } from '../../services/api'
+import {
+  acknowledgeAlert,
+  acknowledgeArrival,
+  incomingAlerts,
+} from '../../services/api'
 import { ALERT_STYLES, PRIORITY_STYLES, formatTime } from '../../lib/status'
 import { useRealtime } from '../../hooks/useRealtime'
 import LiveBadge from '../../components/common/LiveBadge'
@@ -27,6 +31,7 @@ export default function HospitalAlerts() {
     if (
       type === 'hospital.alert' ||
       type === 'hospital.alert_acknowledged' ||
+      type === 'hospital.arrival_acknowledged' ||
       type === 'patient.added' ||
       type.startsWith('incident.')
     ) {
@@ -39,6 +44,21 @@ export default function HospitalAlerts() {
     try {
       await acknowledgeAlert(id)
       load()
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function confirmArrival(id) {
+    setBusyId(id)
+    setError('')
+    try {
+      await acknowledgeArrival(id)
+      load()
+    } catch (e) {
+      setError(
+        e.response?.data?.detail || 'Could not confirm patient arrival.'
+      )
     } finally {
       setBusyId(null)
     }
@@ -98,6 +118,11 @@ export default function HospitalAlerts() {
               <span>Sent: {formatTime(a.created_at)}</span>
               {a.acknowledged_at && <span>Acknowledged: {formatTime(a.acknowledged_at)}</span>}
               <span>Location: {a.incident?.address || '—'}</span>
+              {a.arrival_acknowledged_at && (
+                <span className="text-emerald-400">
+                  Patient arrival confirmed: {formatTime(a.arrival_acknowledged_at)}
+                </span>
+              )}
             </div>
             {a.message && <p className="mt-2 text-sm text-slate-300">{a.message}</p>}
 
@@ -121,16 +146,31 @@ export default function HospitalAlerts() {
               ))}
             </div>
 
-            {a.alert_status === 'SENT' && (
-              <button
-                onClick={() => acknowledge(a.id)}
-                disabled={busyId === a.id}
-                className="mt-4 flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold hover:bg-emerald-500 disabled:opacity-60"
-              >
-                <CheckCircle2 size={15} />
-                {busyId === a.id ? 'Acknowledging…' : 'Acknowledge pre-alert'}
-              </button>
-            )}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {a.alert_status === 'SENT' && (
+                <button
+                  onClick={() => acknowledge(a.id)}
+                  disabled={busyId === a.id}
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold hover:bg-emerald-500 disabled:opacity-60"
+                >
+                  <CheckCircle2 size={15} />
+                  {busyId === a.id ? 'Acknowledging…' : 'Acknowledge pre-alert'}
+                </button>
+              )}
+              {['ARRIVED', 'CLOSED'].includes(a.incident?.status) &&
+                !a.arrival_acknowledged_at && (
+                  <button
+                    onClick={() => confirmArrival(a.id)}
+                    disabled={busyId === a.id}
+                    className="flex items-center gap-1.5 rounded-lg border border-emerald-600 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-60"
+                  >
+                    <CheckCircle2 size={15} />
+                    {busyId === a.id
+                      ? 'Confirming…'
+                      : 'Confirm patient arrival'}
+                  </button>
+                )}
+            </div>
           </div>
         ))}
       </div>

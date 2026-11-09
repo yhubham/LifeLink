@@ -1,108 +1,118 @@
-import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { Loader2, Search } from 'lucide-react'
-import { trackIncident } from '../../services/api'
+import { useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { KeyRound, Loader2, LockKeyhole, Search } from 'lucide-react'
+import { accessTicket } from '../../services/api'
 import CallButton from '../../components/common/CallButton'
 
-const STEPS = ['REPORTED', 'VERIFIED', 'ASSIGNED', 'RESPONDING', 'ARRIVED', 'CLOSED']
+function recentCodes() {
+  try {
+    return JSON.parse(localStorage.getItem('lifelink-ticket-codes') || '[]')
+  } catch {
+    return []
+  }
+}
 
 export default function Track() {
+  const navigate = useNavigate()
   const { id } = useParams()
-  const [code, setCode] = useState(id || '')
-  const [incident, setIncident] = useState(null)
+  const [code, setCode] = useState((id || '').toUpperCase())
+  const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const recents = recentCodes()
 
-  async function lookup(target) {
-    if (!target) return
+  async function lookup(event) {
+    event.preventDefault()
+    if (!code.trim() || pin.length < 4) return
     setLoading(true)
     setError('')
     try {
-      const data = await trackIncident(target.trim())
-      setIncident(data)
-    } catch {
-      setIncident(null)
-      setError('No incident found for that code.')
+      const data = await accessTicket(code.trim().toUpperCase(), pin.trim())
+      sessionStorage.setItem(
+        `lifelink-ticket:${data.ticket.ticket_number}`,
+        data.ticket_token
+      )
+      navigate(`/ticket/${data.ticket.ticket_number}`)
+    } catch (e) {
+      setError(
+        e.response?.data?.detail ||
+          'Ticket number or PIN is incorrect. Check the details and try again.'
+      )
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (id) lookup(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
-
-  const currentIndex = incident ? STEPS.indexOf(incident.status) : -1
-
   return (
-    <div className="mx-auto min-h-screen max-w-2xl px-5 py-10">
+    <div className="mx-auto min-h-screen max-w-xl px-5 py-12">
       <CallButton compact />
       <Link to="/" className="text-sm text-slate-500 hover:text-slate-300">
         ← Home
       </Link>
-      <h1 className="mt-3 text-2xl font-bold">Track incident</h1>
+      <div className="mt-4 flex items-center gap-2">
+        <LockKeyhole size={20} className="text-amber-300" />
+        <h1 className="text-2xl font-bold">Track an incident</h1>
+      </div>
+      <p className="mt-1 text-sm text-slate-400">
+        Use the ticket number and PIN you received when the report was submitted.
+      </p>
 
       <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          lookup(code)
-        }}
-        className="mt-4 flex gap-2"
+        onSubmit={lookup}
+        className="mt-5 space-y-3 rounded-xl border border-navy-700 bg-navy-900 p-5"
       >
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="LL-2026-0001"
-          className="flex-1 rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 font-mono uppercase outline-none focus:border-red-500"
-        />
+        <label className="block text-sm">
+          <span className="font-semibold text-slate-200">Ticket number</span>
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder="LL-2026-0001"
+            className="mt-1 w-full rounded-lg border border-navy-700 bg-navy-950 px-3 py-2.5 font-mono uppercase text-slate-100 outline-none focus:border-red-500"
+          />
+        </label>
+        <label className="block text-sm">
+          <span className="font-semibold text-slate-200">Ticket PIN</span>
+          <input
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            inputMode="numeric"
+            placeholder="6-digit PIN"
+            className="mt-1 w-full rounded-lg border border-navy-700 bg-navy-950 px-3 py-2.5 font-mono tracking-[0.3em] text-slate-100 outline-none focus:border-red-500"
+          />
+        </label>
+
+        {error && <p className="text-sm text-red-400">{error}</p>}
+
         <button
           type="submit"
-          className="flex items-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 font-semibold hover:bg-red-500"
+          disabled={loading || !code.trim() || pin.length < 4}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 py-2.5 text-sm font-bold hover:bg-red-500 disabled:opacity-60"
         >
-          {loading ? <Loader2 className="animate-spin" size={17} /> : <Search size={17} />}
-          Track
+          {loading ? <Loader2 size={17} className="animate-spin" /> : <Search size={17} />}
+          {loading ? 'Checking…' : 'Open ticket'}
         </button>
       </form>
 
-      {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
-
-      {incident && (
-        <div className="mt-6 rounded-xl border border-navy-700 bg-navy-900 p-5">
-          <div className="flex items-baseline justify-between">
-            <span className="font-mono font-bold text-emerald-400">
-              {incident.public_code}
-            </span>
-            <span className="text-sm text-slate-400">{incident.incident_type}</span>
+      {recents.length > 0 && (
+        <div className="mt-4">
+          <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            Recent tickets on this device
           </div>
-          <p className="mt-2 text-sm text-slate-300">{incident.description}</p>
-
-          <ol className="mt-6 space-y-3">
-            {STEPS.map((step, i) => {
-              const done = i <= currentIndex
-              return (
-                <li key={step} className="flex items-center gap-3">
-                  <span
-                    className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                      done
-                        ? 'bg-emerald-500 text-navy-950'
-                        : 'bg-navy-800 text-slate-500'
-                    }`}
-                  >
-                    {i + 1}
-                  </span>
-                  <span className={done ? 'text-slate-100' : 'text-slate-500'}>
-                    {step.charAt(0) + step.slice(1).toLowerCase()}
-                  </span>
-                  {i === currentIndex && (
-                    <span className="ml-auto rounded bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-400">
-                      CURRENT
-                    </span>
-                  )}
-                </li>
-              )
-            })}
-          </ol>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {recents.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setCode(item)}
+                className="flex items-center gap-1.5 rounded-lg border border-navy-700 px-2.5 py-1.5 font-mono text-xs text-slate-300 hover:bg-navy-800"
+              >
+                <KeyRound size={12} /> {item}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-slate-600">
+            Save the PIN separately. It is never stored in the browser.
+          </p>
         </div>
       )}
     </div>

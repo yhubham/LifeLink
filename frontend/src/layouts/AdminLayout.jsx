@@ -10,6 +10,8 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '../context/authStore'
 import MobileNav from '../components/common/MobileNav'
+import DashboardSwitcher from '../components/common/DashboardSwitcher'
+import CallCenter from '../components/calls/CallCenter'
 
 const NAV = [
   ['/admin/dashboard', 'Overview', LayoutDashboard],
@@ -72,6 +74,9 @@ export default function AdminLayout() {
           <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-bold text-emerald-400">
             SIMULATION LIVE
           </span>
+          <div className="ml-auto">
+            <DashboardSwitcher />
+          </div>
         </header>
         <main className="p-4 pb-24 md:p-6">
           <Outlet />
@@ -79,6 +84,7 @@ export default function AdminLayout() {
       </div>
 
       <MobileNav items={NAV} activeClass="text-red-400" />
+      <CallCenter />
     </div>
   )
 }

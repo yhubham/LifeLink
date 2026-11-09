@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '../context/authStore'
 import MobileNav from '../components/common/MobileNav'
+import DashboardSwitcher from '../components/common/DashboardSwitcher'
+import CallCenter from '../components/calls/CallCenter'
 
 const NAV = [
   ['/ambulance/dashboard', 'Dashboard', LayoutDashboard],
@@ -75,6 +77,9 @@ export default function AmbulanceLayout() {
           <span className="ml-auto hidden text-xs text-slate-500 sm:inline">
             GPS movement is simulated — no real vehicles
           </span>
+          <div className="ml-auto sm:ml-0">
+            <DashboardSwitcher />
+          </div>
         </header>
         <main className="p-4 pb-24 md:p-6">
           <Outlet />
@@ -82,6 +87,7 @@ export default function AmbulanceLayout() {
       </div>
 
       <MobileNav items={NAV} activeClass="text-sky-300" />
+      <CallCenter />
     </div>
   )
 }

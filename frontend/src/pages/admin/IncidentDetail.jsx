@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, XCircle, Stethoscope } from 'lucide-react'
+import {
+  ArrowLeft,
+  CheckCircle2,
+  PhoneCall,
+  XCircle,
+  Stethoscope,
+} from 'lucide-react'
 import {
   closeIncident,
   createAssignment,
@@ -15,6 +21,8 @@ import {
   submitTriage,
   verifyIncident,
 } from '../../services/api'
+import { requestCall } from '../../components/calls/requestCall'
+import MediaGallery from '../../components/incidents/MediaGallery'
 import {
   ALERT_STYLES,
   ASSIGNMENT_STYLES,
@@ -225,14 +233,44 @@ export default function IncidentDetail() {
         </div>
       </div>
 
-      <p className="mt-3 text-sm text-slate-400">
-        📍 {incident.address || `${incident.latitude.toFixed(5)}, ${incident.longitude.toFixed(5)}`}
-      </p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <Info label="Incident type" value={incident.incident_type} />
+        <Info
+          label="Injured people"
+          value={`${incident.injured_count ?? 0} reported`}
+        />
+        <Info
+          label="Location"
+          value={
+            incident.address ||
+            `${incident.latitude.toFixed(5)}, ${incident.longitude.toFixed(5)}`
+          }
+        />
+        <Info
+          label="Landmark"
+          value={incident.landmark || 'Not provided'}
+        />
+      </div>
+
+      {incident.preferred_hospital?.name && (
+        <p className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-navy-800 bg-navy-900 px-3 py-2 text-xs text-slate-400">
+          Reporter's preferred hospital:{' '}
+          <span className="font-semibold text-slate-200">
+            {incident.preferred_hospital.name}
+          </span>
+          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+            availability not verified
+          </span>
+        </p>
+      )}
+
       {incident.description && (
         <p className="mt-2 max-w-2xl rounded-lg border border-navy-800 bg-navy-900 p-3 text-sm text-slate-300">
           {incident.description}
         </p>
       )}
+
+      <MediaGallery incidentId={incident.id} />
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <AssignmentPanel incident={incident} tick={tick} />
@@ -384,6 +422,12 @@ function AssignmentPanel({ incident, tick }) {
             >
               {simulating ? 'Stop auto-drive' : 'Auto-drive'}
             </button>
+            <button
+              onClick={() => requestCall(incident.id)}
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-500"
+            >
+              <PhoneCall size={13} /> Call responder
+            </button>
           </div>
           <p className="mt-2 text-[11px] text-slate-600">
             Simulated GPS movement — 0.8 km per step.
@@ -529,6 +573,17 @@ function PreAlertPanel({ incident, tick }) {
       <p className="mt-2 text-[11px] text-slate-600">
         Only the hospital dashboard can acknowledge a pre-alert.
       </p>
+    </div>
+  )
+}
+
+function Info({ label, value }) {
+  return (
+    <div className="rounded-lg border border-navy-800 bg-navy-950/60 px-3 py-2">
+      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+        {label}
+      </div>
+      <div className="mt-0.5 truncate text-sm text-slate-200">{value}</div>
     </div>
   )
 }

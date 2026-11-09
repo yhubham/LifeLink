@@ -182,6 +182,62 @@ def test_pre_alert_acknowledge_and_capacity(client, admin_headers, hospital_head
     assert capacity.json()["available_beds"] == 8
 
 
+def test_hospital_confirms_patient_arrival(
+    client, admin_headers, hospital_headers, db
+):
+    hospital = Hospital(
+        id=uuid.uuid4(),
+        name="Arrival Test Hospital",
+        latitude=28.61,
+        longitude=77.21,
+        specialties=["Emergency"],
+        total_beds=30,
+        available_beds=10,
+        is_active=True,
+    )
+    db.add(hospital)
+    db.commit()
+
+    incident = _create_incident(client)
+    alert = client.post(
+        "/api/v1/hospital-alerts",
+        headers=admin_headers,
+        json={
+            "incident_id": incident["id"],
+            "hospital_id": str(hospital.id),
+            "eta_minutes": 4,
+        },
+    ).json()
+
+    # The patient cannot arrive before the ambulance reaches the scene.
+    too_early = client.post(
+        f"/api/v1/hospital-alerts/{alert['id']}/arrival", headers=hospital_headers
+    )
+    assert too_early.status_code == 409
+
+    client.patch(
+        f"/api/v1/incidents/{incident['id']}",
+        headers=admin_headers,
+        json={"status": "ARRIVED"},
+    )
+
+    arrival = client.post(
+        f"/api/v1/hospital-alerts/{alert['id']}/arrival", headers=hospital_headers
+    )
+    assert arrival.status_code == 200, arrival.text
+    assert arrival.json()["arrival_acknowledged_at"]
+
+    # Idempotent: a second confirmation keeps the original timestamp.
+    again = client.post(
+        f"/api/v1/hospital-alerts/{alert['id']}/arrival", headers=hospital_headers
+    )
+    assert again.status_code == 200
+    assert (
+        again.json()["arrival_acknowledged_at"]
+        == arrival.json()["arrival_acknowledged_at"]
+    )
+
+
 def test_capacity_cannot_exceed_total_beds(client, hospital_headers, db):
     hospital = Hospital(
         id=uuid.uuid4(),

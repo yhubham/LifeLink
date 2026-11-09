@@ -3,6 +3,7 @@ import Landing from './pages/public/Landing'
 import Emergency from './pages/public/Emergency'
 import Report from './pages/public/Report'
 import Track from './pages/public/Track'
+import Ticket from './pages/public/Ticket'
 import Guidance from './pages/public/Guidance'
 import Login from './pages/admin/Login'
 import Dashboard from './pages/admin/Dashboard'
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/emergency/guidance/:id" element={<Guidance />} />
         <Route path="/track" element={<Track />} />
         <Route path="/track/:id" element={<Track />} />
+        <Route path="/ticket/:code" element={<Ticket />} />
 
         {/* Shared staff login */}
         <Route path="/admin/login" element={<Login />} />
@@ -45,7 +47,7 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute roles={['ADMIN', 'POLICE', 'RESCUE']}>
+            <ProtectedRoute roles={['ADMIN', 'POLICE', 'RESCUE']} dashboard="admin">
               <AdminLayout />
             </ProtectedRoute>
           }
@@ -62,7 +64,7 @@ export default function App() {
         <Route
           path="/ambulance"
           element={
-            <ProtectedRoute roles={['AMBULANCE']}>
+            <ProtectedRoute dashboard="ambulance">
               <AmbulanceLayout />
             </ProtectedRoute>
           }
@@ -78,7 +80,7 @@ export default function App() {
         <Route
           path="/hospital"
           element={
-            <ProtectedRoute roles={['HOSPITAL']}>
+            <ProtectedRoute dashboard="hospital">
               <HospitalLayout />
             </ProtectedRoute>
           }
