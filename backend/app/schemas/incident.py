@@ -29,6 +29,8 @@ class PatientOut(BaseModel):
 
 
 class PreferredHospital(BaseModel):
+    place_id: str | None = Field(default=None, max_length=200)
+    # Kept for older clients that still submit OpenStreetMap identifiers.
     osm_id: str | None = Field(default=None, max_length=64)
     name: str = Field(min_length=1, max_length=200)
     address: str | None = Field(default=None, max_length=500)

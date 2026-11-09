@@ -4,6 +4,7 @@ import {
   TileLayer,
   CircleMarker,
   Popup,
+  useMap,
 } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
@@ -18,7 +19,19 @@ import {
 } from 'lucide-react'
 import { discoverHospitals } from '../../services/api'
 
-const RADIUS_OPTIONS = [2000, 5000, 8000, 15000]
+const RADIUS_OPTIONS = [5000, 10000, 20000]
+const EXPAND_PROMPT_THRESHOLD = 3
+
+function MapFocus({ latitude, longitude }) {
+  const map = useMap()
+  useEffect(() => {
+    if (latitude == null || longitude == null) return
+    map.setView([latitude, longitude], Math.max(map.getZoom(), 15), {
+      animate: false,
+    })
+  }, [latitude, longitude, map])
+  return null
+}
 
 export default function HospitalDiscovery({
   latitude,
@@ -27,7 +40,7 @@ export default function HospitalDiscovery({
   onSelect,
 }) {
   const [rows, setRows] = useState([])
-  const [radius, setRadius] = useState(8000)
+  const [radius, setRadius] = useState(RADIUS_OPTIONS[0])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [note, setNote] = useState('')
@@ -44,8 +57,8 @@ export default function HospitalDiscovery({
       const data = await discoverHospitals({
         latitude,
         longitude,
-        radius_m: radius,
-        limit: 20,
+        radius,
+        limit: 50,
       })
       setRows(data.results || [])
       setNote(data.availability_note || '')
@@ -53,7 +66,7 @@ export default function HospitalDiscovery({
       setRows([])
       setError(
         e.response?.data?.detail ||
-          'Could not search OpenStreetMap right now. You can still submit the report.'
+          'Could not search nearby hospitals right now. You can still submit the report.'
       )
     } finally {
       setLoading(false)
@@ -66,6 +79,10 @@ export default function HospitalDiscovery({
     return () => clearTimeout(timer)
   }, [load, latitude, longitude, reloadKey])
 
+  const nextRadius = RADIUS_OPTIONS.find((value) => value > radius)
+  const canExpand =
+    !loading && !error && rows.length < EXPAND_PROMPT_THRESHOLD && Boolean(nextRadius)
+
   if (latitude == null || longitude == null) {
     return (
       <section className="rounded-xl border border-navy-700 bg-navy-900 p-4">
@@ -73,7 +90,7 @@ export default function HospitalDiscovery({
           <Building2 size={17} className="text-emerald-400" /> Nearby hospitals
         </h2>
         <p className="mt-2 text-sm text-slate-500">
-          Add your location above to search OpenStreetMap for hospitals near you.
+          Add your location above to search for hospitals near you.
         </p>
       </section>
     )
@@ -85,7 +102,7 @@ export default function HospitalDiscovery({
         <Building2 size={17} className="text-emerald-400" />
         <h2 className="font-bold">Nearby hospitals</h2>
         <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-bold text-sky-300">
-          OPENSTREETMAP
+          GEOAPIFY
         </span>
         <div className="ml-auto flex items-center gap-2">
           <select
@@ -112,8 +129,9 @@ export default function HospitalDiscovery({
       </div>
 
       <p className="mt-1 text-xs text-slate-500">
-        Discovered places are real OSM hospitals, but their bed availability is not
-        verified. Choosing one only records your preference.
+        Hospitals are found with the Geoapify Places API near your location and
+        sorted by distance. Their bed availability is not verified; choosing one
+        only records your preference.
       </p>
 
       {error && (
@@ -126,21 +144,21 @@ export default function HospitalDiscovery({
         <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
           {loading && rows.length === 0 && (
             <p className="py-6 text-center text-sm text-slate-500">
-              Searching OpenStreetMap…
+              Searching nearby hospitals…
             </p>
           )}
           {!loading && !error && rows.length === 0 && (
             <p className="py-6 text-center text-sm text-slate-500">
               <MapPin size={14} className="mr-1 inline" />
-              No hospitals found in this radius. Try a larger radius.
+              No hospitals found within {radius / 1000} km.
             </p>
           )}
           {rows.map((h) => {
-            const isSelected = selected?.osm_id === h.osm_id
+            const isSelected = selected?.place_id === h.place_id
             return (
               <button
                 type="button"
-                key={h.osm_id}
+                key={h.place_id}
                 onClick={() => onSelect(isSelected ? null : h)}
                 className={`w-full rounded-lg border p-3 text-left transition ${
                   isSelected
@@ -158,7 +176,7 @@ export default function HospitalDiscovery({
                   </span>
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
-                  {h.address && <span>{h.address}</span>}
+                  <span>{h.address || 'Address not listed'}</span>
                   {h.phone && (
                     <span className="flex items-center gap-1">
                       <Phone size={10} /> {h.phone}
@@ -175,6 +193,9 @@ export default function HospitalDiscovery({
                       Website
                     </a>
                   )}
+                </div>
+                <div className="mt-1 text-[11px] text-slate-600">
+                  {Number(h.latitude).toFixed(5)}, {Number(h.longitude).toFixed(5)}
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   {h.availability_verified ? (
@@ -194,6 +215,17 @@ export default function HospitalDiscovery({
               </button>
             )
           })}
+
+          {canExpand && (
+            <button
+              type="button"
+              onClick={() => setRadius(nextRadius)}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-sky-700/50 bg-sky-950/30 px-3 py-2 text-xs font-semibold text-sky-300 hover:bg-sky-900/30"
+            >
+              <Navigation size={12} /> Only {rows.length} found — expand to{' '}
+              {nextRadius / 1000} km
+            </button>
+          )}
         </div>
 
         <div className="h-80 overflow-hidden rounded-lg border border-navy-700">
@@ -205,6 +237,10 @@ export default function HospitalDiscovery({
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <MapFocus
+              latitude={selected?.latitude}
+              longitude={selected?.longitude}
             />
             <CircleMarker
               center={[latitude, longitude]}
@@ -220,12 +256,14 @@ export default function HospitalDiscovery({
             </CircleMarker>
             {rows.map((h) => (
               <CircleMarker
-                key={h.osm_id}
+                key={h.place_id}
                 center={[h.latitude, h.longitude]}
-                radius={selected?.osm_id === h.osm_id ? 9 : 6}
+                radius={selected?.place_id === h.place_id ? 9 : 6}
                 pathOptions={{
-                  color: selected?.osm_id === h.osm_id ? '#34d399' : '#38bdf8',
-                  fillColor: selected?.osm_id === h.osm_id ? '#34d399' : '#38bdf8',
+                  color:
+                    selected?.place_id === h.place_id ? '#34d399' : '#38bdf8',
+                  fillColor:
+                    selected?.place_id === h.place_id ? '#34d399' : '#38bdf8',
                   fillOpacity: 0.8,
                   weight: 2,
                 }}
@@ -236,6 +274,10 @@ export default function HospitalDiscovery({
                     <div className="font-bold">{h.name}</div>
                     <div>{h.distance_km} km away</div>
                     <div>{h.address || 'Address not listed'}</div>
+                    <div className="text-slate-500">
+                      {Number(h.latitude).toFixed(5)},{' '}
+                      {Number(h.longitude).toFixed(5)}
+                    </div>
                     <div className="text-slate-500">
                       {h.availability_verified
                         ? `${h.available_beds} verified beds`
@@ -254,7 +296,10 @@ export default function HospitalDiscovery({
           <CheckCircle2 size={14} />
           Selected: <span className="font-bold">{selected.name}</span>
           <span className="text-emerald-400/70">
-            (preference only — not a confirmed bed reservation)
+            {selected.address || 'Address not listed'} ·{' '}
+            {Number(selected.latitude).toFixed(5)},{' '}
+            {Number(selected.longitude).toFixed(5)} (preference only — not a
+            confirmed bed reservation)
           </span>
           <button
             type="button"

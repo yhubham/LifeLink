@@ -71,11 +71,13 @@ screen.
   The report form has clear required markers, incident type, description,
   automatic timestamp, GPS/manual/map-pin location, landmark, injured count,
   optional patient details and up to 12 private photos.
-- **Nearby hospitals** — live OpenStreetMap/Overpass discovery with distance,
-  address, contact, website and map. OSM rows are clearly labelled
-  **availability not verified**; only registered LifeLink hospitals expose live
-  bed counts. Overpass timeouts/rate limits degrade gracefully and the report
-  can still be submitted.
+- **Nearby hospitals** — live Geoapify Places discovery (`healthcare.hospital`)
+  nearest-first, with distance, address, coordinates, contact, website and map.
+  The report page starts at 5 km and can expand to 10 km or 20 km; clicking a
+  hospital focuses it on the OpenStreetMap map. Discovered rows are clearly
+  labelled **availability not verified**; only registered LifeLink hospitals
+  expose live bed counts. API timeouts, rate limits and invalid-key errors
+  degrade gracefully and the report can still be submitted.
 - **Secure tickets** — a unique ticket number plus a one-time PIN (stored only
   as an Argon2 hash) and an opaque upload token (stored only as a keyed hash).
   The PIN unlocks a short-lived signed ticket token on any device. Public

@@ -88,7 +88,10 @@ the authorization model and REST/Voice API contract stay the same.
 
 ## Public hospital discovery
 
-`app/services/hospital_discovery.py` calls Overpass with a small cache and maps
-upstream timeouts / `429` / `503` / `504` to a readable `503`. Results are real
-OSM places, not bed availability. Only a match to a registered LifeLink hospital
-attaches live capacity and sets `availability_verified=true`.
+`app/services/hospital_discovery.py` calls the Geoapify Places API
+(`categories=healthcare.hospital`) with a small cache and maps upstream
+timeouts, network failures, `401/403`, `429` and `5xx` to readable `502/503`
+responses. The API key lives only in `backend/.env` and is never exposed to the
+browser. Results are real places sorted by haversine distance, not bed
+availability. Only a match to a registered LifeLink hospital attaches live
+capacity and sets `availability_verified=true`.

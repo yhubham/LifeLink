@@ -60,7 +60,7 @@ POST /api/v1/incidents
   "landmark": "Opposite the metro station",
   "injured_count": 2,
   "preferred_hospital": {
-    "osm_id": "node/123456",
+    "place_id": "51f4ca50708c4d5340591a85c9f9079c3c40f00103f901df360147030000009203134a61797072617a",
     "name": "AIIMS Delhi",
     "latitude": 28.5672,
     "longitude": 77.2100,
@@ -201,7 +201,7 @@ target the unit selected by the control room.
 | Method | Endpoint | Auth | Function |
 |---|---|---|---|
 | GET | `/hospitals` | staff | Facilities with mock capacity + `open_alerts` |
-| GET | `/hospitals/discover` | — (public) | OpenStreetMap/Overpass discovery near coordinates |
+| GET | `/hospitals/discover` | — (public) | Geoapify Places discovery near coordinates |
 | GET | `/hospitals/nearby` | staff | Real-time finder: filters + nearest-first ranking (`?latitude=&longitude=&q=&specialty=&min_beds=&max_distance_km=&limit=`) |
 | GET | `/hospitals/match` | staff | Active hospitals with beds, nearest first (`?latitude=&longitude=&min_beds=&limit=`) |
 | PATCH | `/hospitals/{id}/capacity` | ADMIN, HOSPITAL | Update total/available beds |
@@ -210,9 +210,13 @@ target the unit selected by the control room.
 | POST | `/hospital-alerts/{id}/acknowledge` | HOSPITAL, ADMIN | Accept the incoming patient |
 | POST | `/hospital-alerts/{id}/arrival` | HOSPITAL, ADMIN | Confirm the patient physically arrived at the hospital |
 
-`GET /hospitals/discover?latitude=&longitude=&radius_m=&limit=` is the public
-report-page search. It calls Overpass with a cache and maps upstream `429/503/504`
-to a readable `503`. Every row carries `discovery_source: "OpenStreetMap"` and
+`GET /hospitals/discover?latitude=&longitude=&radius=&limit=` is the public
+report-page search. It calls the Geoapify Places API (`healthcare.hospital`)
+server-side with a cache and maps timeouts, network failures, `401/403`, `429`
+and `5xx` errors to readable `502/503` responses. `radius` is in metres
+(default `5000`, max `20000`); `radius_m` remains accepted for older clients.
+Every row carries `place_id`, `name`, `address`, `latitude`, `longitude`,
+`distance_km`, optional `phone`/`website`, `discovery_source: "Geoapify"` and
 `availability_verified: false`; a row is upgraded to verified only when it can
 be matched to a registered hospital with live capacity data.
 

@@ -18,12 +18,14 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:5173"
 
-    # --- Public hospital discovery (OpenStreetMap / Overpass) -------------
-    OVERPASS_API_URL: str = "https://overpass-api.de/api/interpreter"
-    OVERPASS_TIMEOUT_SECONDS: float = 12.0
-    OVERPASS_CACHE_SECONDS: int = 120
-    HOSPITAL_DISCOVERY_RADIUS_M: int = 8000
-    HOSPITAL_DISCOVERY_LIMIT: int = 25
+    # --- Public hospital discovery (Geoapify Places API) ------------------
+    GEOAPIFY_API_URL: str = "https://api.geoapify.com/v2/places"
+    GEOAPIFY_API_KEY: str = ""
+    GEOAPIFY_TIMEOUT_SECONDS: float = 10.0
+    GEOAPIFY_CACHE_SECONDS: int = 120
+    GEOAPIFY_CATEGORY: str = "healthcare.hospital"
+    HOSPITAL_DISCOVERY_RADIUS_M: int = 5000
+    HOSPITAL_DISCOVERY_LIMIT: int = 50
 
     # --- Secure tickets / media -------------------------------------------
     TICKET_TOKEN_EXPIRE_MINUTES: int = 60 * 24

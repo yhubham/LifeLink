@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from app.api.deps import DbDep, require_roles
+from app.core.config import settings
 from app.models import (
     AlertStatus,
     AuditLog,
@@ -19,7 +20,7 @@ from app.models import (
 from app.models.user import utcnow
 from app.services.geo import eta_minutes, haversine_km
 from app.services.hospital_discovery import (
-    OverpassUnavailable,
+    HospitalDiscoveryUnavailable,
     discover_hospitals,
 )
 from app.services.incident_events import add_event
@@ -151,20 +152,31 @@ def discover_nearby_hospitals(
     db: DbDep,
     latitude: float = Query(ge=-90, le=90),
     longitude: float = Query(ge=-180, le=180),
-    radius_m: int = Query(default=8000, ge=500, le=20000),
-    limit: int = Query(default=20, ge=1, le=50),
+    radius: int | None = Query(
+        default=None,
+        ge=500,
+        le=20000,
+        description="Search radius in metres (default 5000).",
+    ),
+    radius_m: int | None = Query(
+        default=None, ge=500, le=20000, include_in_schema=False
+    ),
+    limit: int = Query(default=50, ge=1, le=50),
 ):
-    """Public OSM discovery for the report page (no staff login required).
+    """Public nearby-hospital search backed by the Geoapify Places API.
 
-    Rows are explicitly marked as unverified for bed availability. If an OSM
-    result can be matched to a registered LifeLink hospital, that hospital's
-    live capacity is attached and ``availability_verified`` becomes true.
+    The browser sends the coordinates it actually obtained (GPS, manual entry
+    or map pin). Rows are nearest-first and explicitly marked as unverified for
+    bed availability. If a Geoapify place can be matched to a registered
+    LifeLink hospital, that hospital's live capacity is attached and
+    ``availability_verified`` becomes true.
     """
+    search_radius = radius or radius_m or settings.HOSPITAL_DISCOVERY_RADIUS_M
     try:
-        rows = discover_hospitals(latitude, longitude, radius_m, limit)
-    except OverpassUnavailable as exc:
+        rows = discover_hospitals(latitude, longitude, search_radius, limit)
+    except HospitalDiscoveryUnavailable as exc:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+            status_code=exc.status_code, detail=str(exc)
         ) from exc
 
     registered = db.scalars(select(Hospital).where(Hospital.is_active.is_(True))).all()
@@ -200,11 +212,14 @@ def discover_nearby_hospitals(
     return {
         "results": rows,
         "count": len(rows),
-        "source": "OpenStreetMap / Overpass",
+        "center": {"latitude": latitude, "longitude": longitude},
+        "radius_m": search_radius,
+        "source": "Geoapify Places API",
+        "category": settings.GEOAPIFY_CATEGORY,
         "availability_note": (
-            "Discovered hospitals are real OSM places but their bed availability "
-            "is not verified. Only registered hospitals with live capacity show "
-            "verified bed counts."
+            "Discovered hospitals come from Geoapify (including OpenStreetMap "
+            "places) but their bed availability is not verified. Only registered "
+            "hospitals with live capacity show verified bed counts."
         ),
     }
 

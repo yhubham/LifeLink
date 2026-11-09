@@ -82,6 +82,8 @@ export default function Report() {
     setLat(nextLat)
     setLon(nextLon)
     setLocation(nextLat, nextLon, suppliedAddress)
+    // A hospital chosen for the previous location may no longer be nearby.
+    setSelectedHospital(null)
   }
 
   function useMyLocation() {
@@ -174,7 +176,7 @@ export default function Report() {
         injured_count: Number(injuredCount),
         preferred_hospital: selectedHospital
           ? {
-              osm_id: selectedHospital.osm_id,
+              place_id: selectedHospital.place_id,
               name: selectedHospital.name,
               address: selectedHospital.address || null,
               latitude: selectedHospital.latitude,
