@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Activity, LogIn } from 'lucide-react'
 import { login } from '../../services/api'
-import { useAuthStore } from '../../context/authStore'
+import { homeForRole, useAuthStore } from '../../context/authStore'
 
 const DEMO_ACCOUNTS = [
   ['Admin', 'admin@lifelink.demo'],
@@ -26,7 +26,7 @@ export default function Login() {
     try {
       const data = await login(email, password)
       setAuth(data)
-      navigate('/admin/dashboard')
+      navigate(homeForRole(data.role))
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed — is the API running?')
     } finally {

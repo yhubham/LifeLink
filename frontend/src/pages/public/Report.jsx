@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { MapPin, Plus, Trash2, CheckCircle2 } from 'lucide-react'
 import { createIncident } from '../../services/api'
 import { useReportStore } from '../../context/reportStore'
+import CallButton from '../../components/common/CallButton'
 
 const blankPatient = () => ({
   display_name: '',
@@ -244,6 +245,7 @@ export default function Report() {
           Educational simulation — no real emergency services are contacted.
         </p>
       </form>
+      <CallButton compact />
     </div>
   )
 }

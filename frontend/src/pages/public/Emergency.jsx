@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Siren, Loader2 } from 'lucide-react'
+import CallButton from '../../components/common/CallButton'
 import { useReportStore } from '../../context/reportStore'
 
 export default function Emergency() {
@@ -30,6 +31,7 @@ export default function Emergency() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
+      <CallButton />
       <p className="text-sm uppercase tracking-widest text-slate-400">
         Emergency SOS
       </p>

@@ -54,6 +54,80 @@ export async function getStats() {
   return data
 }
 
+export async function listAmbulances() {
+  const { data } = await api.get('/ambulances')
+  return data
+}
+
+export async function createAmbulance(payload) {
+  const { data } = await api.post('/ambulances', payload)
+  return data
+}
+
+export async function listAssignments(params = {}) {
+  const { data } = await api.get('/assignments', { params })
+  return data
+}
+
+export async function myAssignments() {
+  const { data } = await api.get('/assignments/mine')
+  return data
+}
+
+export async function createAssignment(payload) {
+  const { data } = await api.post('/assignments', payload)
+  return data
+}
+
+export async function updateAssignment(id, assignment_status) {
+  const { data } = await api.patch(`/assignments/${id}`, { assignment_status })
+  return data
+}
+
+export async function simulateStep(id) {
+  const { data } = await api.post(`/assignments/${id}/simulate-step`)
+  return data
+}
+
+export async function listHospitals() {
+  const { data } = await api.get('/hospitals')
+  return data
+}
+
+export async function matchHospitals(latitude, longitude, limit = 5) {
+  const { data } = await api.get('/hospitals/match', {
+    params: { latitude, longitude, limit },
+  })
+  return data
+}
+
+export async function updateCapacity(id, payload) {
+  const { data } = await api.patch(`/hospitals/${id}/capacity`, payload)
+  return data
+}
+
+export async function sendHospitalAlert(payload) {
+  const { data } = await api.post('/hospital-alerts', payload)
+  return data
+}
+
+export async function incomingAlerts(includeAcknowledged = false) {
+  const { data } = await api.get('/hospital-alerts/incoming', {
+    params: { include_acknowledged: includeAcknowledged },
+  })
+  return data
+}
+
+export async function acknowledgeAlert(id) {
+  const { data } = await api.post(`/hospital-alerts/${id}/acknowledge`)
+  return data
+}
+
+export async function getPatient(id) {
+  const { data } = await api.get(`/patients/${id}`)
+  return data
+}
+
 export async function verifyIncident(id) {
   const { data } = await api.post(`/incidents/${id}/verify`)
   return data

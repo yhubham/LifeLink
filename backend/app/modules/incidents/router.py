@@ -236,3 +236,55 @@ def list_patients(
     return db.scalars(
         select(Patient).where(Patient.incident_id == incident_id)
     ).all()
+
+
+@router.get("/patients/{patient_id}")
+def get_patient(
+    patient_id: uuid.UUID,
+    db: DbDep,
+    _: User = Depends(require_roles(*STAFF)),
+):
+    """Patient detail with incident context and the latest triage record."""
+    from app.models import TriageRecord
+
+    patient = db.get(Patient, patient_id)
+    if patient is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
+        )
+    incident = db.get(Incident, patient.incident_id)
+    latest = db.scalar(
+        select(TriageRecord)
+        .where(TriageRecord.patient_id == patient.id)
+        .order_by(TriageRecord.created_at.desc())
+        .limit(1)
+    )
+    return {
+        "id": patient.id,
+        "incident_id": patient.incident_id,
+        "display_name": patient.display_name,
+        "age": patient.age,
+        "consciousness": patient.consciousness,
+        "breathing": patient.breathing,
+        "bleeding": patient.bleeding,
+        "additional_notes": patient.additional_notes,
+        "incident": {
+            "id": incident.id,
+            "public_code": incident.public_code,
+            "incident_type": incident.incident_type,
+            "address": incident.address,
+            "status": incident.status.value,
+            "latitude": incident.latitude,
+            "longitude": incident.longitude,
+        }
+        if incident
+        else None,
+        "latest_triage": {
+            "priority_level": latest.priority_level,
+            "reason": latest.reason,
+            "protocol": latest.protocol,
+            "created_at": latest.created_at,
+        }
+        if latest
+        else None,
+    }

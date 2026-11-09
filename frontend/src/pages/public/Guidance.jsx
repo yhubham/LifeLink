@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ChevronLeft, ShieldAlert, CheckCircle2 } from 'lucide-react'
 import api from '../../services/api'
+import CallButton from '../../components/common/CallButton'
 
 const PRIORITY_STYLES = {
   L1: 'bg-red-600 text-white',
@@ -55,6 +56,7 @@ export default function Guidance() {
   if (!id) {
     return (
       <div className="mx-auto min-h-screen max-w-2xl px-5 py-10">
+        <CallButton compact />
         <Link to="/" className="text-sm text-slate-500 hover:text-slate-300">
           <ChevronLeft size={14} className="inline" /> Home
         </Link>
@@ -101,6 +103,7 @@ export default function Guidance() {
 
   return (
     <div className="mx-auto min-h-screen max-w-2xl px-5 py-10">
+      <CallButton compact />
       <Link to="/emergency/report" className="text-sm text-slate-500 hover:text-slate-300">
         <ChevronLeft size={14} className="inline" /> Report
       </Link>

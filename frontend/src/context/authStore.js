@@ -23,3 +23,12 @@ export function getStoredToken() {
     return null
   }
 }
+
+export function homeForRole(role) {
+  if (role === 'AMBULANCE') return '/ambulance/dashboard'
+  if (role === 'HOSPITAL') return '/hospital/dashboard'
+  if (role === 'ADMIN' || role === 'POLICE' || role === 'RESCUE') {
+    return '/admin/dashboard'
+  }
+  return '/admin/login'
+}

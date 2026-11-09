@@ -29,6 +29,8 @@ Roles: `ADMIN`, `AMBULANCE`, `HOSPITAL`, `POLICE`, `RESCUE`.
 | POST | `/incidents/{id}/close` | ADMIN | → CLOSED |
 | POST | `/incidents/{id}/patients` | staff | Add patient |
 | GET | `/incidents/{id}/patients` | staff | List patients |
+| GET | `/incidents/stats` | staff | Control-room counters (status totals, 24 h) |
+| GET | `/patients/{id}` | staff | Patient detail + incident + latest triage |
 
 Example: create incident
 
@@ -88,11 +90,57 @@ Response:
  "protocol": "demo-sim-v1"}
 ```
 
-## Not yet implemented (planned weeks 4–6)
+## Ambulances and dispatch
 
-Patient detail/patch endpoints, media uploads, ambulances,
-assignments, GPS updates, hospitals, capacity, hospital alerts, WebSocket
-channels (`/ws/admin`, `/ws/ambulance`, `/ws/hospital`, `/ws/incidents/{id}`).
+| Method | Endpoint | Auth | Function |
+|---|---|---|---|
+| GET | `/ambulances` | staff | Fleet list with status + last GPS |
+| POST | `/ambulances` | ADMIN | Register a unit |
+| POST | `/ambulances/{id}/location` | ADMIN, AMBULANCE | Manual GPS update (logs history) |
+| GET | `/assignments` | staff | List (`?incident_id=`, `?active_only=`) |
+| POST | `/assignments` | ADMIN | Dispatch an available ambulance |
+| GET | `/assignments/mine` | AMBULANCE, ADMIN | Active assignments for the crew view |
+| PATCH | `/assignments/{id}` | ADMIN, AMBULANCE | `ASSIGNED → ACCEPTED → EN_ROUTE → ARRIVED → COMPLETED` (or `CANCELLED`) |
+| POST | `/assignments/{id}/simulate-step` | ADMIN, AMBULANCE | Move the unit 0.8 km toward the incident |
+
+`simulate-step` returns the new position, remaining `distance_km`, `eta_minutes`
+(at a simulated 40 km/h) and `arrived`. Arrival flips the assignment and the
+incident to `ARRIVED`. GPS movement is simulated for the demo — no real vehicles.
+
+Status side effects: dispatching sets the ambulance `ASSIGNED`; `EN_ROUTE` sets
+`RESPONDING`; `ARRIVED` sets `ON_SCENE`; `COMPLETED`/`CANCELLED` free the unit.
+
+Demo shortcut: there is no crew→ambulance link in the schema, so
+`/assignments/mine` returns every active assignment in the simulated fleet.
+
+## Hospitals and pre-alerts
+
+| Method | Endpoint | Auth | Function |
+|---|---|---|---|
+| GET | `/hospitals` | staff | Facilities with mock capacity |
+| GET | `/hospitals/match` | staff | Active hospitals with beds, nearest first (`?latitude=&longitude=&min_beds=&limit=`) |
+| PATCH | `/hospitals/{id}/capacity` | ADMIN, HOSPITAL | Update total/available beds |
+| POST | `/hospital-alerts` | ADMIN, AMBULANCE | Send a pre-alert (ETA + message) |
+| GET | `/hospital-alerts/incoming` | staff | Open alerts (`?include_acknowledged=true` for all) |
+| POST | `/hospital-alerts/{id}/acknowledge` | HOSPITAL, ADMIN | Accept the incoming patient |
+
+`match` adds `distance_km` (haversine) and `eta_minutes` (simulated 40 km/h).
+Alerts embed the incident and its patients with latest triage priority. Only one
+open alert per incident/hospital pair (`409` on duplicates). Bed counts are mock
+data for the demonstration.
+
+## Public call button
+
+Every public page (landing, emergency, report, track, guidance) shows a floating
+`tel:` button. The number is a single constant,
+`EMERGENCY_CALL_NUMBER` in `frontend/src/components/common/CallButton.jsx` —
+currently `859505879` exactly as supplied (9 digits; update the constant if the
+full number differs).
+
+## Not yet implemented (planned week 6)
+
+WebSocket channels (`/ws/admin`, `/ws/ambulance`, `/ws/hospital`,
+`/ws/incidents/{id}`), media uploads, API test suite, deployment.
 
 ## Error codes
 

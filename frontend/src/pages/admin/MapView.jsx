@@ -2,18 +2,24 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { listIncidents } from '../../services/api'
+import { listAmbulances, listHospitals, listIncidents } from '../../services/api'
 import { STATUS_DOT, formatTime } from '../../lib/status'
 
 const DELHI = [28.6139, 77.209]
 
 export default function MapView() {
   const [incidents, setIncidents] = useState([])
+  const [ambulances, setAmbulances] = useState([])
+  const [hospitals, setHospitals] = useState([])
   const [error, setError] = useState('')
 
   useEffect(() => {
-    listIncidents()
-      .then(setIncidents)
+    Promise.all([listIncidents(), listAmbulances(), listHospitals()])
+      .then(([inc, amb, hosp]) => {
+        setIncidents(inc)
+        setAmbulances(amb)
+        setHospitals(hosp)
+      })
       .catch((e) => setError(e.response?.data?.detail || 'Could not load map data.'))
   }, [])
 
@@ -56,6 +62,50 @@ export default function MapView() {
               </Popup>
             </CircleMarker>
           ))}
+          {ambulances
+            .filter((a) => a.latitude != null)
+            .map((a) => (
+              <CircleMarker
+                key={a.id}
+                center={[a.latitude, a.longitude]}
+                radius={7}
+                pathOptions={{
+                  color: '#38bdf8',
+                  fillColor: '#38bdf8',
+                  fillOpacity: 0.9,
+                  weight: 2,
+                }}
+              >
+                <Popup>
+                  <div className="text-xs">
+                    <div className="font-bold">{a.call_sign}</div>
+                    <div>{a.status}</div>
+                    <div className="text-slate-500">simulated GPS</div>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            ))}
+          {hospitals.map((h) => (
+            <CircleMarker
+              key={h.id}
+              center={[h.latitude, h.longitude]}
+              radius={9}
+              pathOptions={{
+                color: '#34d399',
+                fillColor: '#34d399',
+                fillOpacity: 0.5,
+                weight: 2,
+              }}
+            >
+              <Popup>
+                <div className="text-xs">
+                  <div className="font-bold">{h.name}</div>
+                  <div>{h.available_beds} / {h.total_beds} beds free</div>
+                  <div className="text-slate-500">mock capacity</div>
+                </div>
+              </Popup>
+            </CircleMarker>
+          ))}
         </MapContainer>
       </div>
 
@@ -66,9 +116,16 @@ export default function MapView() {
             {status}
           </span>
         ))}
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-sky-400" /> AMBULANCE
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /> HOSPITAL
+        </span>
       </div>
       <p className="mt-2 text-xs text-slate-600">
-        Simulated data — ambulance and hospital layers arrive in week 5.
+        Incidents are live from the database; ambulance GPS and hospital capacity are
+        simulated.
       </p>
     </div>
   )

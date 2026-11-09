@@ -25,6 +25,30 @@ export const STATUS_DOT = {
   CANCELLED: '#475569',
 }
 
+export const ASSIGNMENT_STYLES = {
+  ASSIGNED: 'bg-sky-500/15 text-sky-300 border-sky-500/40',
+  ACCEPTED: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40',
+  EN_ROUTE: 'bg-amber-500/15 text-amber-300 border-amber-500/40',
+  ARRIVED: 'bg-teal-500/15 text-teal-300 border-teal-500/40',
+  COMPLETED: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40',
+  CANCELLED: 'bg-slate-700/40 text-slate-500 border-slate-600/40',
+}
+
+export const AMBULANCE_STYLES = {
+  AVAILABLE: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40',
+  ASSIGNED: 'bg-sky-500/15 text-sky-300 border-sky-500/40',
+  EN_ROUTE: 'bg-amber-500/15 text-amber-300 border-amber-500/40',
+  ON_SCENE: 'bg-teal-500/15 text-teal-300 border-teal-500/40',
+  TRANSPORTING: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40',
+  OUT_OF_SERVICE: 'bg-slate-700/40 text-slate-500 border-slate-600/40',
+}
+
+export const ALERT_STYLES = {
+  SENT: 'bg-red-500/15 text-red-400 border-red-500/40',
+  ACKNOWLEDGED: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40',
+  DECLINED: 'bg-slate-700/40 text-slate-500 border-slate-600/40',
+}
+
 export function formatTime(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleString(undefined, {

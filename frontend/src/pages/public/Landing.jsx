@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Siren, MapPin, ShieldCheck, Activity } from 'lucide-react'
+import CallButton from '../../components/common/CallButton'
 
 export default function Landing() {
   return (
@@ -52,6 +53,7 @@ export default function Landing() {
           ))}
         </div>
       </main>
+      <CallButton />
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Loader2, Search } from 'lucide-react'
 import { trackIncident } from '../../services/api'
+import CallButton from '../../components/common/CallButton'
 
 const STEPS = ['REPORTED', 'VERIFIED', 'ASSIGNED', 'RESPONDING', 'ARRIVED', 'CLOSED']
 
@@ -36,6 +37,7 @@ export default function Track() {
 
   return (
     <div className="mx-auto min-h-screen max-w-2xl px-5 py-10">
+      <CallButton compact />
       <Link to="/" className="text-sm text-slate-500 hover:text-slate-300">
         ← Home
       </Link>

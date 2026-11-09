@@ -14,6 +14,8 @@ const NAV = [
   ['/admin/dashboard', 'Overview', LayoutDashboard],
   ['/admin/incidents', 'Incidents', List],
   ['/admin/map', 'Live map', Map],
+  ['/admin/ambulances', 'Ambulances', Ambulance],
+  ['/admin/hospitals', 'Hospitals', Building2],
 ]
 
 export default function AdminLayout() {
@@ -49,14 +51,6 @@ export default function AdminLayout() {
               <Icon size={17} /> {label}
             </NavLink>
           ))}
-          <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-600">
-            <Ambulance size={17} /> Ambulances
-            <span className="ml-auto text-[10px] uppercase">week 5</span>
-          </div>
-          <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-600">
-            <Building2 size={17} /> Hospitals
-            <span className="ml-auto text-[10px] uppercase">week 5</span>
-          </div>
         </nav>
 
         <div className="mt-auto border-t border-navy-800 pt-4">
