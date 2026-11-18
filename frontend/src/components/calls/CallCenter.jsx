@@ -20,12 +20,8 @@ import {
   rejectCall,
 } from '../../services/api'
 import { getStoredAuth } from '../../context/authStore'
+import { wsBase } from '../../lib/apiBase'
 import { CALL_EVENT } from './requestCall'
-
-function wsBase() {
-  const apiBase = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1'
-  return apiBase.replace(/^http/, 'ws')
-}
 
 function formatDuration(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60)

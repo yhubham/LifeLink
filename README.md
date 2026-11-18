@@ -32,6 +32,36 @@ npm run dev
 - API docs: <http://127.0.0.1:8000/docs>
 - Health: <http://127.0.0.1:8000/api/v1/health>
 
+## Deploying to Vercel
+
+The repository root's `vercel.json` deploys both halves as one Vercel project
+with two services:
+
+| Service | Root | Framework | Public path |
+|---|---|---|---|
+| `frontend` | `frontend/` | Vite | everything not under `/api` |
+| `backend` | `backend/` | FastAPI (`app/main.py`) | `/api/*` → mounted at `/api/v1` |
+
+The frontend calls the API same-origin (`/api/v1`), so no cross-origin or
+service-binding configuration is needed. In local development the Vite dev
+server proxies `/api` and WebSocket upgrades to `127.0.0.1:8000`.
+
+Run both services together with:
+
+```bash
+vercel dev
+```
+
+Set these environment variables in the Vercel project before deploying:
+
+- `DATABASE_URL` — hosted PostgreSQL (PostGIS) connection string
+- `JWT_SECRET` — long random value
+- `GEOAPIFY_API_KEY` — optional, for hospital discovery
+- `GEOAPIFY_API_URL`, `STUN_URLS`, `TURN_*` — optional overrides
+
+Do **not** set `VITE_API_URL`; the app uses the same-origin `/api/v1` path by
+default. See `.env.example` files for the full list.
+
 ### Upgrading an existing database
 
 The first Alembic revision is a baseline of the pre-existing schema. On a

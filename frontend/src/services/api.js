@@ -1,12 +1,13 @@
 import axios from 'axios'
+import { API_BASE } from '../lib/apiBase'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1',
+  baseURL: API_BASE,
 })
 
 // Public flow (ticket PIN/token, OSM discovery, reporter image uploads).
 const publicApi = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1',
+  baseURL: API_BASE,
 })
 
 // Attach the staff JWT (persisted by the auth store) to every request.

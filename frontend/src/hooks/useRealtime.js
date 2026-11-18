@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { getStoredToken } from '../context/authStore'
-
-function wsBase() {
-  const apiBase = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1'
-  return apiBase.replace(/^http/, 'ws')
-}
+import { wsBase } from '../lib/apiBase'
 
 /**
  * Subscribe to a LifeLink realtime channel.
