@@ -2,7 +2,6 @@
 name = "lifelink-backend"
 version = "1.0.0"
 description = "LifeLink API - Emergency response and coordination platform"
-readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "alembic>=1.20.1",
@@ -26,3 +25,8 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.vercel]
+# Tell Vercel's Python builder where the ASGI app lives when this directory is
+# deployed as a service (the app is inside the `app` package, not at the root).
+entrypoint = "app.main:app"
