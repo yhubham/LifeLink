@@ -27,3 +27,6 @@ backend/storage/
 
 # Local Alembic scratch databases
 backend/.alembic_tmp.db
+
+# Local SQLite development database (Docker-free dev)
+backend/lifelink-dev.db

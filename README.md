@@ -54,13 +54,37 @@ vercel dev
 
 Set these environment variables in the Vercel project before deploying:
 
-- `DATABASE_URL` — hosted PostgreSQL (PostGIS) connection string
+- `DATABASE_URL` — hosted PostgreSQL (PostGIS) connection string. Plain
+  `postgresql://` URLs from Neon or the Vercel Postgres integration are
+  accepted; the app rewrites them to the `psycopg` driver.
 - `JWT_SECRET` — long random value
 - `GEOAPIFY_API_KEY` — optional, for hospital discovery
 - `GEOAPIFY_API_URL`, `STUN_URLS`, `TURN_*` — optional overrides
 
 Do **not** set `VITE_API_URL`; the app uses the same-origin `/api/v1` path by
 default. See `.env.example` files for the full list.
+
+If the site loads but every API action fails, check the Vercel Runtime Logs.
+The most common causes are a `DATABASE_URL` that still points at
+`localhost:5433`, a Vercel project Root Directory other than the repository
+root (so `vercel.json` is never read), or a missing `GEOAPIFY_API_KEY` (which
+only disables hospital search; reports can still be submitted).
+
+### Local development without Docker
+
+The backend only uses portable SQLAlchemy types, so SQLite works for a local
+demo if PostgreSQL/Docker is unavailable:
+
+```bash
+cd backend
+export DATABASE_URL=sqlite:///./lifelink-dev.db   # PowerShell: $env:DATABASE_URL='sqlite:///./lifelink-dev.db'
+uv run python -m app.seed                          # creates tables + demo data
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Then run the frontend normally (`npm run dev`); its `/api` proxy reaches the
+backend on port 8000. This is for local development only — do not point the
+deployed Vercel project at SQLite, because function storage is ephemeral.
 
 ### Upgrading an existing database
 

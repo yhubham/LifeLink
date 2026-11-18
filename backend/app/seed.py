@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 
 from app.core.security import hash_password, hash_pin
-from app.database.session import SessionLocal
+from app.database.session import Base, SessionLocal, engine
 from app.models import (
     Ambulance,
     AmbulanceStatus,
@@ -198,6 +198,8 @@ DEMO_INCIDENTS = [
 
 
 def seed() -> None:
+    # Safe to run on a fresh SQLite/Postgres database before the first request.
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         for name, email, role in USERS:

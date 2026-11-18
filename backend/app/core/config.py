@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +12,22 @@ class Settings(BaseSettings):
         "postgresql+psycopg://lifelink_user:lifelink_dev_password"
         "@localhost:5433/lifelink"
     )
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _normalize_database_url(cls, value: str) -> str:
+        """Accept the plain Postgres URLs handed out by hosted providers.
+
+        Neon and the Vercel Postgres integration expose URLs such as
+        ``postgresql://...`` (and legacy ``postgres://...``). SQLAlchemy reads
+        the driver from the scheme; without ``+psycopg`` it would try to load
+        psycopg2, which this project does not install.
+        """
+        value = value.strip()
+        for prefix in ("postgres://", "postgresql://"):
+            if value.startswith(prefix):
+                return "postgresql+psycopg://" + value[len(prefix):]
+        return value
 
     JWT_SECRET: str = "dev-secret-change-me"
     JWT_ALGORITHM: str = "HS256"

@@ -13,6 +13,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import { createIncident, uploadIncidentMedia } from '../../services/api'
+import { apiErrorMessage } from '../../lib/apiError'
 import { useReportStore } from '../../context/reportStore'
 import CallButton from '../../components/common/CallButton'
 import LocationPicker from '../../components/report/LocationPicker'
@@ -188,6 +189,12 @@ export default function Report() {
         patients: patientPayload(),
       })
 
+      if (!incident || typeof incident !== 'object' || !incident.public_code) {
+        throw new Error(
+          'The API did not return a ticket. The backend service is not reachable at /api/v1.'
+        )
+      }
+
       try {
         sessionStorage.setItem(
           `lifelink-ticket:${incident.public_code}`,
@@ -261,11 +268,11 @@ export default function Report() {
         }
       }
     } catch (createError) {
-      const detail = createError.response?.data?.detail
       setError(
-        typeof detail === 'string'
-          ? detail
-          : 'Could not submit the report. Check the fields and try again.'
+        apiErrorMessage(
+          createError,
+          'Could not submit the report. Check the fields and try again.'
+        )
       )
     } finally {
       setSubmitting(false)

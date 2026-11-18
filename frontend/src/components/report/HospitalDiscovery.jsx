@@ -18,6 +18,7 @@ import {
   ShieldAlert,
 } from 'lucide-react'
 import { discoverHospitals } from '../../services/api'
+import { apiErrorMessage } from '../../lib/apiError'
 
 const RADIUS_OPTIONS = [5000, 10000, 20000]
 const EXPAND_PROMPT_THRESHOLD = 3
@@ -60,13 +61,20 @@ export default function HospitalDiscovery({
         radius,
         limit: 50,
       })
+      if (!data || !Array.isArray(data.results)) {
+        throw new Error(
+          'The API returned an unexpected response. The backend service is not reachable at /api/v1.'
+        )
+      }
       setRows(data.results || [])
       setNote(data.availability_note || '')
     } catch (e) {
       setRows([])
       setError(
-        e.response?.data?.detail ||
+        apiErrorMessage(
+          e,
           'Could not search nearby hospitals right now. You can still submit the report.'
+        )
       )
     } finally {
       setLoading(false)
