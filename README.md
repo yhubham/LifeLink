@@ -54,15 +54,33 @@ vercel dev
 
 Set these environment variables in the Vercel project before deploying:
 
-- `DATABASE_URL` — hosted PostgreSQL (PostGIS) connection string. Plain
-  `postgresql://` URLs from Neon or the Vercel Postgres integration are
-  accepted; the app rewrites them to the `psycopg` driver.
+- `DATABASE_URL` — hosted PostgreSQL connection string (Neon, Vercel
+  Postgres). Plain `postgresql://` URLs are accepted; the app rewrites them to
+  the installed `psycopg` driver. **Without it, the API cannot store reports.**
 - `JWT_SECRET` — long random value
 - `GEOAPIFY_API_KEY` — optional, for hospital discovery
 - `GEOAPIFY_API_URL`, `STUN_URLS`, `TURN_*` — optional overrides
 
 Do **not** set `VITE_API_URL`; the app uses the same-origin `/api/v1` path by
 default. See `.env.example` files for the full list.
+
+`/api/v1/health` is deliberately database-independent so it still answers when
+the deployment is misconfigured. It returns the database state, the host being
+used (without credentials) and the driver error:
+
+```json
+{
+  "status": "healthy",
+  "database": "unavailable",
+  "database_target": "postgresql+psycopg://localhost:5433/lifelink",
+  "database_error": "OperationalError: connection failed ..."
+}
+```
+
+- `database: "connected"` — the API is ready.
+- `database_target` showing `localhost` — `DATABASE_URL` was not set in Vercel.
+- `database_error` mentioning `psycopg2` — the URL used an unsupported driver
+  name (plain `postgresql://` is handled automatically).
 
 If the site loads but every API action fails, check the Vercel Runtime Logs.
 The most common causes are a `DATABASE_URL` that still points at
